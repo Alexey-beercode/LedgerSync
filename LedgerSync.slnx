@@ -1,0 +1,11 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/LedgerSync.Api/LedgerSync.Api.csproj" />
+    <Project Path="src/LedgerSync.Application/LedgerSync.Application.csproj" />
+    <Project Path="src/LedgerSync.Domain/LedgerSync.Domain.csproj" />
+    <Project Path="src/LedgerSync.Infrastructure/LedgerSync.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/LedgerSync.Tests/LedgerSync.Tests.csproj" />
+  </Folder>
+</Solution>
