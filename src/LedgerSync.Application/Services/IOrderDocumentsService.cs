@@ -9,6 +9,7 @@ namespace LedgerSync.Application.Services;
 public interface IOrderDocumentsService
 {
     /// <summary>Returns documents of the order.</summary>
+    /// <exception cref="FluentValidation.ValidationException">Order number is invalid.</exception>
     /// <exception cref="OrderNotFoundException">Order does not exist.</exception>
-    Task<OrderDocumentsDto> GetByOrderNumberAsync(string orderNumber, CancellationToken cancellationToken);
+    Task<OrderDocumentsDto> GetByOrderNumberAsync(OrderDocumentsQuery query, CancellationToken cancellationToken);
 }
