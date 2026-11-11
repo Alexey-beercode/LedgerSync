@@ -2,12 +2,6 @@
 ### Local run: http://localhost:5080, Docker: http://localhost:8080
 @baseUrl = http://localhost:5080
 
-### Health: process is alive
-GET {{baseUrl}}/health/live
-
-### Health: database is reachable
-GET {{baseUrl}}/health/ready
-
 ### ---------- Mock external system ----------
 
 ### Active scenario

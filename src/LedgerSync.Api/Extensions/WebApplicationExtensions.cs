@@ -1,6 +1,5 @@
 using LedgerSync.Api.MockExternalApi;
 using LedgerSync.Infrastructure.Persistence;
-using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Options;
 using Scalar.AspNetCore;
 
@@ -41,21 +40,8 @@ public static class WebApplicationExtensions
         if (app.Services.GetRequiredService<MockExternalApiOptions>().Enabled)
             app.MapMockExternalApi();
 
-        app.MapHealthEndpoints();
         app.MapControllers();
 
         return app;
-    }
-
-    /// <summary>
-    /// Liveness: the process responds. Readiness: the database is reachable.
-    /// </summary>
-    private static void MapHealthEndpoints(this WebApplication app)
-    {
-        app.MapHealthChecks("/health/live", new HealthCheckOptions { Predicate = _ => false });
-        app.MapHealthChecks("/health/ready", new HealthCheckOptions
-        {
-            Predicate = check => check.Tags.Contains(HealthTags.Ready)
-        });
     }
 }
