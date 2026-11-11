@@ -31,11 +31,9 @@ public static class WebApplicationExtensions
         app.UseExceptionHandler();
         app.UseStatusCodePages();
 
-        if (app.Environment.IsDevelopment() || app.Configuration.GetValue<bool>("OpenApi:Enabled"))
-        {
-            app.MapOpenApi();
-            app.MapScalarApiReference(options => options.WithTitle("LedgerSync API"));
-        }
+        // The API contract is not secret, so OpenAPI and Scalar UI are always available.
+        app.MapOpenApi();
+        app.MapScalarApiReference(options => options.WithTitle("LedgerSync API"));
 
         if (app.Services.GetRequiredService<MockExternalApiOptions>().Enabled)
             app.MapMockExternalApi();

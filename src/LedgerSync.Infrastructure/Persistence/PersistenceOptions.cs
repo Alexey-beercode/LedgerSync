@@ -1,5 +1,3 @@
-using System.ComponentModel.DataAnnotations;
-
 namespace LedgerSync.Infrastructure.Persistence;
 
 /// <summary>
@@ -15,7 +13,4 @@ public sealed class PersistenceOptions
 
     /// <summary>Insert demo orders on startup. Local/Docker only, never in production.</summary>
     public bool SeedDemoData { get; init; }
-
-    [Range(1, 600)]
-    public int CommandTimeoutSeconds { get; init; } = 30;
 }

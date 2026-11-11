@@ -12,7 +12,7 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace LedgerSync.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(LedgerSyncDbContext))]
-    [Migration("20261111014644_InitialCreate")]
+    [Migration("20261111020513_InitialCreate")]
     partial class InitialCreate
     {
         /// <inheritdoc />
@@ -175,10 +175,6 @@ namespace LedgerSync.Infrastructure.Persistence.Migrations
                         .HasMaxLength(2000)
                         .HasColumnType("character varying(2000)")
                         .HasColumnName("google_sheet_error");
-
-                    b.Property<DateTimeOffset?>("GoogleSheetSentAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("google_sheet_sent_at");
 
                     b.Property<string>("GoogleSheetStatus")
                         .IsRequired()

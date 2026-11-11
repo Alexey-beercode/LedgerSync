@@ -14,7 +14,6 @@ namespace LedgerSync.Application.Features.Sync;
 public sealed class GoogleSheetReporter(
     IGoogleSheetLogger googleSheetLogger,
     IUnitOfWork unitOfWork,
-    TimeProvider timeProvider,
     ILogger<GoogleSheetReporter> logger)
 {
     public async Task ReportAsync(SyncLog syncLog, CancellationToken cancellationToken)
@@ -22,7 +21,7 @@ public sealed class GoogleSheetReporter(
         try
         {
             await googleSheetLogger.SendSyncLogAsync(syncLog.ToGoogleRow(), cancellationToken);
-            syncLog.MarkGoogleSheetSent(timeProvider.GetUtcNow());
+            syncLog.MarkGoogleSheetSent();
             logger.GoogleSheetSent(syncLog.Id);
         }
         catch (Exception ex)

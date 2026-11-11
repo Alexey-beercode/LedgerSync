@@ -47,6 +47,6 @@ public static class WebApplicationBuilderExtensions
 
         builder.Services.AddSingleton(options);
         if (options.Enabled)
-            builder.Services.AddSingleton(new MockExternalScenarioState(options.Scenario));
+            builder.Services.AddSingleton<MockExternalScenarioState>();
     }
 }

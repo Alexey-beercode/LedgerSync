@@ -86,5 +86,5 @@ internal sealed class SyncTestHost
     }
 
     private GoogleSheetReporter CreateReporter(UnitOfWork unitOfWork) =>
-        new(GoogleSheets, unitOfWork, Time, NullLogger<GoogleSheetReporter>.Instance);
+        new(GoogleSheets, unitOfWork, NullLogger<GoogleSheetReporter>.Instance);
 }

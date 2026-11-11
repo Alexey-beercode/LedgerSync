@@ -23,7 +23,6 @@ internal sealed class SyncLogRepository(LedgerSyncDbContext dbContext) : ISyncLo
             .Include(s => s.Errors)
             .OrderByDescending(s => s.StartedAt)
             .Take(take)
-            .AsSplitQuery()
             .ToListAsync(cancellationToken);
 
     public async Task<IReadOnlyList<SyncLog>> GetRunningAsync(CancellationToken cancellationToken) =>

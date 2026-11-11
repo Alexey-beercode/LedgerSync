@@ -32,10 +32,7 @@ public static class InfrastructureServiceCollectionExtensions
 
     private static void AddPersistence(this IServiceCollection services, IConfiguration configuration)
     {
-        services.AddOptions<PersistenceOptions>()
-            .BindConfiguration(PersistenceOptions.SectionName)
-            .ValidateDataAnnotations()
-            .ValidateOnStart();
+        services.AddOptions<PersistenceOptions>().BindConfiguration(PersistenceOptions.SectionName);
 
         var connectionString = configuration.GetConnectionString(PersistenceOptions.ConnectionStringName);
         if (string.IsNullOrWhiteSpace(connectionString))
@@ -45,14 +42,9 @@ public static class InfrastructureServiceCollectionExtensions
         // One shared data source: used by EF Core and by the advisory lock.
         services.AddSingleton(_ => new NpgsqlDataSourceBuilder(connectionString).Build());
 
-        services.AddDbContext<LedgerSyncDbContext>((sp, options) =>
-        {
-            var persistence = sp.GetRequiredService<IOptions<PersistenceOptions>>().Value;
-            options
-                .UseNpgsql(sp.GetRequiredService<NpgsqlDataSource>(),
-                    npgsql => npgsql.CommandTimeout(persistence.CommandTimeoutSeconds))
-                .UseSnakeCaseNamingConvention();
-        });
+        services.AddDbContext<LedgerSyncDbContext>((sp, options) => options
+            .UseNpgsql(sp.GetRequiredService<NpgsqlDataSource>())
+            .UseSnakeCaseNamingConvention());
 
         // Repositories are reached only through the unit of work.
         services.AddScoped<IUnitOfWork, UnitOfWork>();
@@ -67,18 +59,10 @@ public static class InfrastructureServiceCollectionExtensions
             .ValidateOnStart();
 
         services.AddHttpClient<IExternalDocumentsClient, HttpExternalDocumentsClient>((sp, client) =>
-            {
-                var options = sp.GetRequiredService<IOptions<ExternalApiOptions>>().Value;
-                client.BaseAddress = new Uri(options.BaseUrl);
-                client.MaxResponseContentBufferSize = options.MaxResponseSizeMb * 1024L * 1024L;
-                client.Timeout = Timeout.InfiniteTimeSpan; // Timeouts are owned by the resilience pipeline.
-            })
+                client.BaseAddress = new Uri(sp.GetRequiredService<IOptions<ExternalApiOptions>>().Value.BaseUrl))
             .AddStandardResilienceHandler()
             .Configure((resilience, sp) =>
-            {
-                var options = sp.GetRequiredService<IOptions<ExternalApiOptions>>().Value;
-                ConfigureResilience(resilience, options.AttemptTimeoutSeconds, options.MaxRetryAttempts);
-            });
+                ConfigureRetries(resilience, sp.GetRequiredService<IOptions<ExternalApiOptions>>().Value.MaxRetryAttempts));
     }
 
     private static void AddGoogleSheets(this IServiceCollection services, IConfiguration configuration)
@@ -98,28 +82,19 @@ public static class InfrastructureServiceCollectionExtensions
             return;
         }
 
-        services.AddHttpClient<IGoogleSheetLogger, AppsScriptGoogleSheetLogger>(client =>
-                client.Timeout = Timeout.InfiniteTimeSpan)
+        services.AddHttpClient<IGoogleSheetLogger, AppsScriptGoogleSheetLogger>()
             .AddStandardResilienceHandler()
             .Configure((resilience, sp) =>
-            {
-                var options = sp.GetRequiredService<IOptions<GoogleSheetsOptions>>().Value;
-                ConfigureResilience(resilience, options.AttemptTimeoutSeconds, options.MaxRetryAttempts);
-            });
+                ConfigureRetries(resilience, sp.GetRequiredService<IOptions<GoogleSheetsOptions>>().Value.MaxRetryAttempts));
     }
 
     /// <summary>
-    /// Retry with exponential backoff and jitter, per-attempt timeout, total timeout and circuit breaker.
+    /// The standard handler already provides timeouts, exponential backoff with jitter and a circuit breaker;
+    /// only the number of retries and a short base delay are tuned here.
     /// </summary>
-    private static void ConfigureResilience(HttpStandardResilienceOptions resilience, int attemptTimeoutSeconds, int maxRetries)
+    private static void ConfigureRetries(HttpStandardResilienceOptions resilience, int maxRetries)
     {
-        var attemptTimeout = TimeSpan.FromSeconds(attemptTimeoutSeconds);
-
-        resilience.AttemptTimeout.Timeout = attemptTimeout;
         resilience.Retry.MaxRetryAttempts = maxRetries;
         resilience.Retry.Delay = TimeSpan.FromMilliseconds(500);
-        resilience.Retry.UseJitter = true;
-        resilience.TotalRequestTimeout.Timeout = attemptTimeout * (maxRetries + 1) + TimeSpan.FromSeconds(10);
-        resilience.CircuitBreaker.SamplingDuration = attemptTimeout * 2 + TimeSpan.FromSeconds(1);
     }
 }

@@ -33,8 +33,6 @@ public sealed class SyncLog : Entity
     /// <summary>Last Google Sheets delivery error, if any.</summary>
     public string? GoogleSheetError { get; private set; }
 
-    public DateTimeOffset? GoogleSheetSentAt { get; private set; }
-
     /// <summary>Per-document problems (invalid data, unknown order) collected during the run.</summary>
     public IReadOnlyCollection<SyncLogError> Errors => _errors.AsReadOnly();
 
@@ -118,11 +116,10 @@ public sealed class SyncLog : Entity
         FinishedAt = Guard.Utc(utcNow);
     }
 
-    public void MarkGoogleSheetSent(DateTimeOffset utcNow)
+    public void MarkGoogleSheetSent()
     {
         GoogleSheetStatus = GoogleSheetStatus.Sent;
         GoogleSheetError = null;
-        GoogleSheetSentAt = Guard.Utc(utcNow);
     }
 
     public void MarkGoogleSheetFailed(string error)

@@ -320,7 +320,7 @@ DocumentsCreated, DocumentsUpdated, DocumentsSkipped, ErrorMessage`.
 ## 8. Ограничения текущего решения
 
 - **Полная синхронизация каждый раз.** Внешний API отдаёт весь список, без инкрементальной выгрузки
-  (`updatedSince`) и пагинации. Ответ ограничен 10 МБ (`ExternalApi:MaxResponseSizeMb`).
+  (`updatedSince`) и пагинации.
 - **Одна транзакция на запуск.** Это даёт атомарность, но на очень больших пачках транзакция будет долгой.
 - **Запуск только вручную** через API, без планировщика.
 - **Google отправляется синхронно после коммита.** Если процесс упадёт между коммитом и отправкой, строка останется
@@ -413,7 +413,9 @@ Api ──► Infrastructure ──► Application ──► Domain
   включаются только флагами конфигурации;
 - нет health-check endpoint'ов: их некому опрашивать (нет оркестратора и балансировщика), а готовность базы при
   старте обеспечивают healthcheck PostgreSQL в compose и повторы миграций. Добавляются одной строкой при деплое
-  в Kubernetes.
+  в Kubernetes;
+- нет настроек, которые никто не меняет: таймауты HTTP и команд БД, лимит размера ответа, начальный сценарий mock —
+  работают стандартные значения. OpenAPI и Scalar UI доступны всегда: контракт API не секретен.
 
 ### Unit of Work
 
@@ -494,15 +496,13 @@ curl -X PUT http://localhost:8080/mock/external/scenario/Updated
 | Ключ | По умолчанию | Описание |
 |---|---|---|
 | `ConnectionStrings:LedgerSync` | — | Строка подключения PostgreSQL (обязательна) |
-| `Persistence:ApplyMigrationsOnStartup` | `false` (`true` в Development/Docker) | Применять миграции при старте, с повторами пока БД поднимается |
+| `Persistence:ApplyMigrationsOnStartup` | `false` (`true` в Development/Docker) | Применять миграции при старте |
 | `Persistence:SeedDemoData` | `false` (`true` в Development/Docker) | Добавить демо-заказы `ORD-001…003` |
 | `ExternalApi:BaseUrl` | — (обязателен; в Development `http://localhost:5080`) | Адрес внешней системы |
-| `ExternalApi:AttemptTimeoutSeconds` / `MaxRetryAttempts` | `10` / `3` | Таймаут попытки и число повторов |
+| `ExternalApi:MaxRetryAttempts` | `3` | Число повторов; таймауты, backoff с jitter и circuit breaker — стандартные значения `AddStandardResilienceHandler` |
 | `GoogleSheets:Mode` | — (обязателен; в Development/Docker `File`) | `File` (mock CSV) или `AppsScript` |
 | `GoogleSheets:AppsScriptUrl` | — | URL Web App (секрет, не коммитить) |
 | `MockExternalApi:Enabled` | `false` (`true` в Development/Docker) | Подключить mock внешней системы |
-| `MockExternalApi:Scenario` | `Baseline` | Начальный сценарий mock |
-| `OpenApi:Enabled` | `false` (всегда включено в Development) | Публиковать OpenAPI и Scalar UI |
 
 Все секции валидируются при старте (`ValidateOnStart`): при неверной конфигурации приложение не запустится.
 

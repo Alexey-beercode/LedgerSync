@@ -39,8 +39,7 @@ namespace LedgerSync.Infrastructure.Persistence.Migrations
                     documents_skipped = table.Column<int>(type: "integer", nullable: false),
                     error_message = table.Column<string>(type: "character varying(2000)", maxLength: 2000, nullable: true),
                     google_sheet_status = table.Column<string>(type: "character varying(32)", maxLength: 32, nullable: false),
-                    google_sheet_error = table.Column<string>(type: "character varying(2000)", maxLength: 2000, nullable: true),
-                    google_sheet_sent_at = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true)
+                    google_sheet_error = table.Column<string>(type: "character varying(2000)", maxLength: 2000, nullable: true)
                 },
                 constraints: table =>
                 {
