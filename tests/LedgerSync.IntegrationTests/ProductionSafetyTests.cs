@@ -50,10 +50,10 @@ public sealed class ProductionSafetyTests(PostgresFixture postgres) : IAsyncLife
     }
 
     [Fact]
-    public async Task DemoSeeder_RunTwice_InsertsOrdersOnce()
+    public async Task DatabaseInitializer_RunTwice_InsertsDemoOrdersOnce()
     {
-        await postgres.Api.Services.SeedDemoDataAsync();
-        await postgres.Api.Services.SeedDemoDataAsync();
+        await postgres.Api.Services.InitializeDatabaseAsync();
+        await postgres.Api.Services.InitializeDatabaseAsync();
 
         Assert.Equal(3, await postgres.CountAsync("SELECT count(*) FROM orders"));
     }
