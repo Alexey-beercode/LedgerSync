@@ -30,6 +30,10 @@ GET {{baseUrl}}/api/sync/logs?take=20
 ### Resend the latest run to Google Sheets (idempotent)
 POST {{baseUrl}}/api/sync/logs/latest/send-to-google
 
+### Resend a specific run (take runId from /api/sync/logs)
+@runId = 00000000-0000-0000-0000-000000000000
+POST {{baseUrl}}/api/sync/logs/{{runId}}/send-to-google
+
 ### ---------- Orders ----------
 
 ### Documents of an order
