@@ -1,0 +1,44 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: ledgersync-postgres
+    environment:
+      POSTGRES_DB: ledgersync
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+    ports:
+      - "${POSTGRES_PORT:-5433}:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d ledgersync"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  api:
+    build: .
+    container_name: ledgersync-api
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ConnectionStrings__LedgerSync: "Host=postgres;Port=5432;Database=ledgersync;Username=${POSTGRES_USER:-postgres};Password=${POSTGRES_PASSWORD:-postgres}"
+      Persistence__ApplyMigrationsOnStartup: "true"
+      # The mock external API is served by the same container.
+      ExternalApi__BaseUrl: "http://localhost:8080"
+      GoogleSheets__Mode: ${GOOGLE_SHEETS_MODE:-File}
+      GoogleSheets__AppsScriptUrl: ${GOOGLE_SHEETS_APPS_SCRIPT_URL:-}
+      OpenApi__Enabled: "true"
+      Logging__Console__FormatterName: json
+    ports:
+      - "${API_PORT:-8080}:8080"
+    volumes:
+      - google-sheets-mock:/app/google-sheets-mock
+    restart: unless-stopped
+
+volumes:
+  postgres-data:
+  google-sheets-mock:
