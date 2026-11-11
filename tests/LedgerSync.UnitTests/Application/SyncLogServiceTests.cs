@@ -1,0 +1,64 @@
+using FluentValidation;
+using LedgerSync.Application.Common.Exceptions;
+using LedgerSync.Application.Contracts.SyncLogs;
+using LedgerSync.UnitTests.TestData;
+using static LedgerSync.UnitTests.TestData.Payloads;
+
+namespace LedgerSync.UnitTests.Application;
+
+public sealed class SyncLogServiceTests
+{
+    private readonly SyncTestHost _host = new();
+
+    [Fact]
+    public async Task ResendLatest_AfterGoogleOutage_DeliversSameRunOnce()
+    {
+        _host.GoogleSheets.IsUnavailable = true;
+        _host.ExternalSource.Returns(Document());
+        var run = await _host.RunSyncAsync();
+
+        _host.GoogleSheets.IsUnavailable = false;
+        await using var db = _host.CreateDbContext();
+        var result = await _host.CreateSyncLogService(db).ResendLatestToGoogleAsync(CancellationToken.None);
+
+        Assert.Equal(run.RunId, result.RunId);
+        Assert.Equal("Sent", result.GoogleSheetStatus);
+        Assert.Equal(run.RunId, Assert.Single(_host.GoogleSheets.SentRows).RunId);
+    }
+
+    [Fact]
+    public async Task ResendLatest_NoRunsYet_Throws()
+    {
+        await using var db = _host.CreateDbContext();
+
+        await Assert.ThrowsAsync<SyncRunNotFoundException>(() =>
+            _host.CreateSyncLogService(db).ResendLatestToGoogleAsync(CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task GetRecent_ReturnsNewestFirstWithErrors()
+    {
+        _host.ExternalSource.Returns(Document());
+        var first = await _host.RunSyncAsync();
+        _host.Time.Advance(TimeSpan.FromMinutes(1));
+        _host.ExternalSource.Returns(Document("EXT-404", orderNumber: "ORD-404"));
+        var second = await _host.RunSyncAsync();
+
+        await using var db = _host.CreateDbContext();
+        var history = await _host.CreateSyncLogService(db).GetRecentAsync(new SyncLogsQuery(10), CancellationToken.None);
+
+        Assert.Equal([second.RunId, first.RunId], history.Select(h => h.RunId));
+        Assert.Single(history[0].Errors);
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(101)]
+    public async Task GetRecent_TakeOutOfRange_ThrowsValidation(int take)
+    {
+        await using var db = _host.CreateDbContext();
+
+        await Assert.ThrowsAsync<ValidationException>(() =>
+            _host.CreateSyncLogService(db).GetRecentAsync(new SyncLogsQuery(take), CancellationToken.None));
+    }
+}
