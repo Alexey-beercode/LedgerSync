@@ -39,6 +39,7 @@ public sealed class ExternalDocument : Entity
     /// <summary>When the record was last updated in the internal system (UTC).</summary>
     public DateTimeOffset UpdatedAt { get; private set; }
 
+    // Only the foreign key is set on creation, so adding a document never re-inserts its order.
     public Order Order { get; private set; } = null!;
 
     // Required by EF Core.
@@ -62,7 +63,6 @@ public sealed class ExternalDocument : Entity
             ExternalId = Guard.NotEmpty(externalId, EntityName, nameof(ExternalId), FieldLimits.ExternalId),
             OrderId = order.Id,
             OrderNumber = order.OrderNumber,
-            Order = order,
             DocumentType = Guard.NotNull(documentType, EntityName, nameof(DocumentType)),
             DocumentNumber = Guard.NotEmpty(documentNumber, EntityName, nameof(DocumentNumber), FieldLimits.DocumentNumber),
             Amount = Guard.NotNegative(amount, EntityName, nameof(Amount)),
