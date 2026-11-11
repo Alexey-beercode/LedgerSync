@@ -58,7 +58,8 @@ public sealed class DocumentSyncService(
         syncLogs.Add(syncLog);
         await unitOfWork.SaveChangesAsync(token);
 
-        using var scope = logger.BeginScope(new Dictionary<string, object> { ["RunId"] = syncLog.Id });
+        // Every log entry of this run carries RunId, so one run can be traced end to end.
+        using var scope = logger.BeginScope("RunId:{RunId}", syncLog.Id);
         logger.SyncStarted(syncLog.Id);
 
         syncLog = await ExecuteRunAsync(syncLog, token);
