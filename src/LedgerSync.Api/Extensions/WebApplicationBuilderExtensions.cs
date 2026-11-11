@@ -1,3 +1,4 @@
+using LedgerSync.Application;
 using LedgerSync.Infrastructure;
 
 namespace LedgerSync.Api.Extensions;
@@ -9,6 +10,7 @@ public static class WebApplicationBuilderExtensions
 {
     public static WebApplicationBuilder AddLedgerSyncServices(this WebApplicationBuilder builder)
     {
+        builder.Services.AddApplication();
         builder.Services.AddInfrastructure(builder.Configuration);
         builder.Services.AddControllers();
         builder.Services.AddOpenApi();
