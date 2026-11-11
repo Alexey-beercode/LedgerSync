@@ -36,15 +36,14 @@
 | 17 | Google недоступен → откат документов или 500 | Отправка только **после** коммита; любое исключение логгера перехватывается, результат пишется в `google_sheet_status` | `GoogleSheetReporter` | `Handle_GoogleSheetsUnavailable_...`, `GoogleSheetsDown_DocumentsStaySavedAndRunCanBeResent` |
 | 18 | Повтор отправки в Google создаёт дубль строки | Upsert по `RunId` в CSV-mock и в `Code.gs` (+ `LockService`) | `FileGoogleSheetLogger`, `google-apps-script/Code.gs` | `Sync_SuccessfulRun_IsWrittenToMockSheetOnce` |
 | 19 | Потеря строки журнала Google | Статус `Failed` + текст ошибки хранятся в БД; ручной resend идемпотентен | `SyncLog.MarkGoogleSheetFailed`, `ResendLatestSyncLogCommandHandler` | `ResendLatest_AfterGoogleOutage_DeliversSameRunOnce` |
-| 20 | Конкурентное изменение одной строки | Оптимистичная блокировка через системную колонку `xmin` → `PersistenceConflictException` | `ExternalDocumentConfiguration`, `SyncLogConfiguration`, `UnitOfWork` | ревью кода (защита второго уровня за advisory lock) |
-| 21 | Счётчики запуска не сходятся | Доменный инвариант `Created + Updated + Skipped == Received`, иначе исключение | `SyncLog.Complete` | `Complete_CountersDoNotAddUp_Throws`, `Handle_AnyOutcome_CountersAddUpToReceived` |
-| 22 | Изменение уже завершённого запуска | `SyncRunAlreadyFinishedException` | `SyncLog.EnsureRunning` | `FinishedRun_CannotBeChanged` |
-| 23 | Неверная конфигурация обнаруживается только в рантайме | Options + DataAnnotations + `ValidateOnStart`: приложение не стартует | `DependencyInjection`, `*Options` | ревью кода |
-| 24 | База ещё не поднялась при старте контейнера | Миграции с повторами (10 попыток), healthcheck PostgreSQL в compose, `/health/ready` | `DatabaseMigrator`, `docker-compose.yml` | запуск `docker compose up` |
-| 25 | Внутренние детали утекают клиенту | Глобальный `IExceptionHandler`: известные ошибки → 400/404/409, остальные → 500 без деталей, но с `traceId` | `GlobalExceptionHandler` | `Orders_UnknownOrder_Returns404ProblemDetails`, `Logs_InvalidTake_Returns400` |
-| 26 | Огромный ответ источника съедает память | `MaxResponseContentBufferSize` (10 МБ по умолчанию) | `DependencyInjection.AddExternalSource` | ревью кода |
-| 27 | Слишком длинный текст ошибки ломает сохранение запуска | Обрезка до размера колонки в домене | `SyncLog.Truncate`, `SyncLogError.Create` | `Fail_LongMessage_IsTruncatedToColumnSize` |
-| 28 | Сбой невозможно расследовать | Структурированные события с EventId, scope `RunId` во всех записях запуска, JSON-логи в Docker, `traceId` в ответах об ошибках | `SyncLogMessages`, `SyncDocumentsCommandHandler` | `docker compose logs api` |
+| 20 | Счётчики запуска не сходятся | Доменный инвариант `Created + Updated + Skipped == Received`, иначе исключение | `SyncLog.Complete` | `Complete_CountersDoNotAddUp_Throws`, `Handle_AnyOutcome_CountersAddUpToReceived` |
+| 21 | Изменение уже завершённого запуска | `SyncRunAlreadyFinishedException` | `SyncLog.EnsureRunning` | `FinishedRun_CannotBeChanged` |
+| 22 | Неверная конфигурация обнаруживается только в рантайме | Options + DataAnnotations + `ValidateOnStart`: приложение не стартует | `DependencyInjection`, `*Options` | ревью кода |
+| 23 | База ещё не поднялась при старте контейнера | Миграции с повторами (10 попыток), healthcheck PostgreSQL в compose, `/health/ready` | `DatabaseMigrator`, `docker-compose.yml` | запуск `docker compose up` |
+| 24 | Внутренние детали утекают клиенту | Глобальный `IExceptionHandler`: известные ошибки → 400/404/409, остальные → 500 без деталей, но с `traceId` | `GlobalExceptionHandler` | `Orders_UnknownOrder_Returns404ProblemDetails`, `Logs_InvalidTake_Returns400` |
+| 25 | Огромный ответ источника съедает память | `MaxResponseContentBufferSize` (10 МБ по умолчанию) | `DependencyInjection.AddExternalSource` | ревью кода |
+| 26 | Слишком длинный текст ошибки ломает сохранение запуска | Обрезка до размера колонки в домене | `SyncLog.Truncate`, `SyncLogError.Create` | `Fail_LongMessage_IsTruncatedToColumnSize` |
+| 27 | Сбой невозможно расследовать | Структурированные события с EventId, scope `RunId` во всех записях запуска, JSON-логи в Docker, `traceId` в ответах об ошибках | `SyncLogMessages`, `SyncDocumentsCommandHandler` | `docker compose logs api` |
 
 ## Как увидеть это вживую
 
@@ -80,7 +79,8 @@ curl -X POST http://localhost:8080/api/sync/documents
 
 `Failed` с причиной `HTTP 503` после повторов. Документы не тронуты, запуск записан в журнал и в Google Sheets.
 
-Отказ Google: запустить с `GOOGLE_SHEETS_MODE=Unavailable`. Синхронизация успешна, документы сохранены,
+Отказ Google: запустить с недоступным адресом Apps Script (`GOOGLE_SHEETS_MODE=AppsScript`,
+`GOOGLE_SHEETS_APPS_SCRIPT_URL=http://localhost:9/`). Синхронизация успешна, документы сохранены,
 `googleSheetStatus: Failed`. После возврата в `File` вызов `POST /api/sync/logs/latest/send-to-google` даёт `Sent`,
 и строка в таблице одна.
 

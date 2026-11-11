@@ -133,7 +133,7 @@ dotnet test tests/LedgerSync.UnitTests
 | `sync_log_errors` | Отклонённые документы конкретного запуска | `external_id` + причина |
 
 Статусы и типы хранятся строками (`Invoice`, `Signed`, `PartialSuccess`…), чтобы данные читались без справочников.
-Для оптимистичной блокировки используется системная колонка PostgreSQL `xmin`.
+Одновременную запись исключает advisory lock (см. п. 4), поэтому оптимистичные блокировки не нужны.
 
 Миграции лежат в `src/LedgerSync.Infrastructure/Persistence/Migrations` и применяются при старте
 (если `Persistence:ApplyMigrationsOnStartup=true`) или вручную:
@@ -243,7 +243,6 @@ DocumentsCreated, DocumentsUpdated, DocumentsSkipped, ErrorMessage`.
 |---|---|---|
 | `File` (по умолчанию) | `FileGoogleSheetLogger` | **Вариант C (mock).** CSV-файл с теми же колонками, что и лист Google |
 | `AppsScript` | `AppsScriptGoogleSheetLogger` | **Вариант B (реальная интеграция).** HTTP POST в Apps Script Web App ([google-apps-script/Code.gs](google-apps-script/Code.gs)) |
-| `Unavailable` | `UnavailableGoogleSheetLogger` | Имитация недоступности Google — для демонстрации обработки ошибок |
 
 Свойства, важные для надёжности:
 
@@ -264,9 +263,11 @@ DocumentsCreated, DocumentsUpdated, DocumentsSkipped, ErrorMessage`.
   docker compose exec api cat google-sheets-mock/sync-log.csv
   ```
 
-- Сценарий отказа: `GOOGLE_SHEETS_MODE=Unavailable docker compose up -d` → синхронизация проходит,
-  документы сохранены, в ответе `"googleSheetStatus": "Failed"`. После возврата `File` повторная отправка
-  `POST /api/sync/logs/latest/send-to-google` даёт `Sent`.
+- Сценарий отказа: указать недоступный адрес Apps Script, например
+  `GOOGLE_SHEETS_MODE=AppsScript GOOGLE_SHEETS_APPS_SCRIPT_URL=http://localhost:9/ docker compose up -d`.
+  Синхронизация проходит, документы сохранены, после повторов в ответе `"googleSheetStatus": "Failed"`.
+  После возврата `File` повторная отправка `POST /api/sync/logs/latest/send-to-google` даёт `Sent`.
+  В автотестах отказ имитирует тестовый `UnavailableGoogleSheetLogger`, в боевом коде такого режима нет.
 
 ### Как переключиться на реальную Google-таблицу
 
@@ -370,13 +371,19 @@ Api ──► Infrastructure ──► Application ──► Domain
 Реализация намеренно лёгкая, без enterprise-обвязки:
 
 - **Без MediatR и диспетчера.** Интерфейсы `ICommand`/`IQuery` и `ICommandHandler`/`IQueryHandler`
-  ([Cqrs.cs](src/LedgerSync.Application/Abstractions/Messaging/Cqrs.cs)) занимают несколько строк. Контроллер
+  ([Abstractions/Messaging](src/LedgerSync.Application/Abstractions/Messaging)) занимают несколько строк. Контроллер
   получает нужный обработчик через `[FromServices]`, поэтому путь вызова виден без «магии». MediatR с v13
   распространяется по коммерческой лицензии, а для четырёх операций посредник ничего не даёт.
 - **Без pipeline behaviors.** Валидация — один явный вызов `ValidateAndThrowAsync` в начале обработчика.
 - **Одна модель данных** для чтения и записи, без отдельных read-моделей и баз.
-- **Небольшие фичи в одном файле**: запрос, валидатор и обработчик рядом (`Features/SyncLogs/GetSyncLogs.cs`).
-  Синхронизация, как самая сложная операция, разложена на отдельные файлы.
+- **Папка на операцию, один тип на файл**: запрос, валидатор и обработчик лежат рядом
+  (`Features/SyncLogs/GetSyncLogs/`), поэтому всё про одну операцию находится в одном месте.
+
+Что ещё упрощено сознательно:
+
+- нет навигационных свойств между `Order` и `ExternalDocument`: связи хватает внешнего ключа `OrderId`;
+- нет оптимистичных блокировок (`xmin`): единственного писателя уже гарантирует advisory lock;
+- нет demo-режимов в боевом коде: отказ Google имитируется только в тестах.
 
 ### Unit of Work
 
@@ -455,7 +462,7 @@ curl -X PUT http://localhost:8080/mock/external/scenario/Updated
 | `Persistence:ApplyMigrationsOnStartup` | `false` (`true` в Development/Docker) | Применять миграции при старте, с повторами пока БД поднимается |
 | `ExternalApi:BaseUrl` | `http://localhost:5080` | Адрес внешней системы |
 | `ExternalApi:AttemptTimeoutSeconds` / `MaxRetryAttempts` | `10` / `3` | Таймаут попытки и число повторов |
-| `GoogleSheets:Mode` | `File` | `File`, `AppsScript`, `Unavailable` |
+| `GoogleSheets:Mode` | `File` | `File` (mock CSV) или `AppsScript` |
 | `GoogleSheets:AppsScriptUrl` | — | URL Web App (секрет, не коммитить) |
 | `MockExternalApi:Scenario` | `Baseline` | Начальный сценарий mock |
 | `OpenApi:Enabled` | `false` (всегда включено в Development) | Публиковать OpenAPI и Scalar UI |
@@ -466,7 +473,7 @@ curl -X PUT http://localhost:8080/mock/external/scenario/Updated
 
 | Вопрос | Решение | Почему |
 |---|---|---|
-| Enum или класс | `Enumeration<T>` (smart enum) | Нельзя получить неопределённое значение, есть безопасный `TryFromName` для недоверенных данных, у значения может быть поведение (`DocumentStatus.IsTerminal`) |
+| Enum или класс | `Enumeration<T>` (smart enum) | Нельзя получить неопределённое значение, есть безопасный `TryFromName` для недоверенных данных, имена совпадают в БД, API и коде |
 | Исключения | Узкие типы: `InvalidEntityDataException`, `UnknownEnumerationValueException`, `SyncRunAlreadyFinishedException`, `SyncAlreadyRunningException`, `OrderNotFoundException`… | По названию сразу понятно, что произошло. Exception handler точно маппит их в HTTP-коды |
 | Маппинг | Явные extension-методы вместо AutoMapper | 4 DTO, маппинг проверяется компилятором и читается без «магии». AutoMapper с v15 распространяется по коммерческой лицензии |
 | Валидация | FluentValidation для внешних данных и параметров запросов | Внешние данные недоверенные: проверяются до попадания в домен, все ошибки собираются сразу и сохраняются в журнал |
