@@ -18,7 +18,7 @@ namespace LedgerSync.Infrastructure;
 /// <summary>
 /// Registers infrastructure services: database, external API client, Google Sheets logger.
 /// </summary>
-public static class DependencyInjection
+public static class InfrastructureServiceCollectionExtensions
 {
     public static IServiceCollection AddInfrastructure(this IServiceCollection services, IConfiguration configuration)
     {
