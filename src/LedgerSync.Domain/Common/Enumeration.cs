@@ -34,12 +34,6 @@ public abstract class Enumeration<TSelf> : IEquatable<TSelf>
             ? value
             : throw new UnknownEnumerationValueException(typeof(TSelf).Name, name);
 
-    /// <summary>Resolves a value by id.</summary>
-    /// <exception cref="UnknownEnumerationValueException">No value with this id.</exception>
-    public static TSelf FromId(int id) =>
-        List.FirstOrDefault(v => v.Id == id)
-        ?? throw new UnknownEnumerationValueException(typeof(TSelf).Name, id.ToString());
-
     /// <summary>Safe lookup by name for untrusted input.</summary>
     public static bool TryFromName(string? name, out TSelf value)
     {

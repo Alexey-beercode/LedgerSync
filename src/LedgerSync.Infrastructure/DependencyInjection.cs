@@ -91,25 +91,20 @@ public static class DependencyInjection
         var mode = configuration.GetSection(GoogleSheetsOptions.SectionName)
             .GetValue(nameof(GoogleSheetsOptions.Mode), GoogleSheetsMode.File);
 
-        switch (mode)
+        if (mode == GoogleSheetsMode.File)
         {
-            case GoogleSheetsMode.AppsScript:
-                services.AddHttpClient<IGoogleSheetLogger, AppsScriptGoogleSheetLogger>(client =>
-                        client.Timeout = Timeout.InfiniteTimeSpan)
-                    .AddStandardResilienceHandler()
-                    .Configure((resilience, sp) =>
-                    {
-                        var options = sp.GetRequiredService<IOptions<GoogleSheetsOptions>>().Value;
-                        ConfigureResilience(resilience, options.AttemptTimeoutSeconds, options.MaxRetryAttempts);
-                    });
-                break;
-            case GoogleSheetsMode.Unavailable:
-                services.AddSingleton<IGoogleSheetLogger, UnavailableGoogleSheetLogger>();
-                break;
-            default:
-                services.AddSingleton<IGoogleSheetLogger, FileGoogleSheetLogger>();
-                break;
+            services.AddSingleton<IGoogleSheetLogger, FileGoogleSheetLogger>();
+            return;
         }
+
+        services.AddHttpClient<IGoogleSheetLogger, AppsScriptGoogleSheetLogger>(client =>
+                client.Timeout = Timeout.InfiniteTimeSpan)
+            .AddStandardResilienceHandler()
+            .Configure((resilience, sp) =>
+            {
+                var options = sp.GetRequiredService<IOptions<GoogleSheetsOptions>>().Value;
+                ConfigureResilience(resilience, options.AttemptTimeoutSeconds, options.MaxRetryAttempts);
+            });
     }
 
     /// <summary>
