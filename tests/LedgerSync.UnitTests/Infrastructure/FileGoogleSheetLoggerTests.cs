@@ -15,7 +15,6 @@ public sealed class FileGoogleSheetLoggerTests : IDisposable
     public FileGoogleSheetLoggerTests() =>
         _logger = new FileGoogleSheetLogger(Options.Create(new GoogleSheetsOptions
         {
-            Mode = GoogleSheetsMode.File,
             FilePath = _path
         }));
 
