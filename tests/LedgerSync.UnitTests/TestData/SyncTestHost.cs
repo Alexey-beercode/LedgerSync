@@ -2,7 +2,7 @@ using LedgerSync.Application.Contracts.Sync;
 using LedgerSync.Application.Features.Sync;
 using LedgerSync.Application.Features.Sync.SyncDocuments;
 using LedgerSync.Application.Features.SyncLogs.GetSyncLogs;
-using LedgerSync.Application.Features.SyncLogs.ResendLatestSyncLog;
+using LedgerSync.Application.Features.SyncLogs.ResendSyncLog;
 using LedgerSync.Domain.Entities;
 using LedgerSync.Infrastructure.Persistence;
 using LedgerSync.UnitTests.Fakes;
@@ -24,9 +24,13 @@ internal sealed class SyncTestHost
 
     public SyncTestHost()
     {
-        // Applies HasData seed (ORD-001..ORD-003).
+        // Known orders; ORD-404 is intentionally missing.
         using var db = CreateDbContext();
-        db.Database.EnsureCreated();
+        db.Orders.AddRange(
+            Order.Create("ORD-001", "Alpha Logistics LLP", Time.GetUtcNow()),
+            Order.Create("ORD-002", "Beta Construction LLP", Time.GetUtcNow()),
+            Order.Create("ORD-003", "Gamma Retail JSC", Time.GetUtcNow()));
+        db.SaveChanges();
     }
 
     public FakeTimeProvider Time { get; } = new(new DateTimeOffset(2026, 7, 1, 12, 0, 0, TimeSpan.Zero));
@@ -63,10 +67,10 @@ internal sealed class SyncTestHost
     public GetSyncLogsQueryHandler CreateGetSyncLogsHandler(LedgerSyncDbContext db) =>
         new(new UnitOfWork(db), new GetSyncLogsQueryValidator());
 
-    public ResendLatestSyncLogCommandHandler CreateResendHandler(LedgerSyncDbContext db)
+    public ResendSyncLogCommandHandler CreateResendHandler(LedgerSyncDbContext db)
     {
         var unitOfWork = new UnitOfWork(db);
-        return new ResendLatestSyncLogCommandHandler(unitOfWork, CreateReporter(unitOfWork));
+        return new ResendSyncLogCommandHandler(unitOfWork, CreateReporter(unitOfWork));
     }
 
     public async Task<List<ExternalDocument>> GetDocumentsAsync()

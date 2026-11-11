@@ -173,6 +173,35 @@ public sealed class SyncDocumentsCommandHandlerTests
     }
 
     [Fact]
+    public async Task Handle_CurrencyChanged_UpdatesAmountTogetherWithCurrency()
+    {
+        _host.ExternalSource.Returns(Document(amount: 150_000m, currency: "KZT"));
+        await _host.RunSyncAsync();
+
+        _host.ExternalSource.Returns(Document(amount: 300m, currency: "USD", updatedAt: BaseTime.AddDays(1)));
+        var result = await _host.RunSyncAsync();
+
+        var document = Assert.Single(await _host.GetDocumentsAsync());
+        Assert.Equal(1, result.DocumentsUpdated);
+        Assert.Equal((300m, "USD"), (document.Amount, document.Currency));
+    }
+
+    [Fact]
+    public async Task Handle_KnownDocumentMovedToAnotherOrder_IsRejectedAndNotChanged()
+    {
+        _host.ExternalSource.Returns(Document(orderNumber: "ORD-001"));
+        await _host.RunSyncAsync();
+
+        _host.ExternalSource.Returns(Document(orderNumber: "ORD-002", status: "Sent", updatedAt: BaseTime.AddDays(1)));
+        var result = await _host.RunSyncAsync();
+
+        Assert.Equal("PartialSuccess", result.Status);
+        var document = Assert.Single(await _host.GetDocumentsAsync());
+        Assert.Equal(("ORD-001", DocumentStatus.Created), (document.OrderNumber, document.Status));
+        Assert.Contains("cannot change its order", Assert.Single((await _host.GetSyncLogAsync(result.RunId)).Errors).Reason);
+    }
+
+    [Fact]
     public async Task Handle_SameDocumentTwiceInBatch_StoresLatestVersionOnce()
     {
         _host.ExternalSource.Returns(
