@@ -4,6 +4,8 @@ using LedgerSync.Application.Abstractions.GoogleSheets;
 using LedgerSync.Application.Common.Exceptions;
 using LedgerSync.Application.Contracts.SyncLogs;
 using Microsoft.Extensions.Options;
+using Polly.CircuitBreaker;
+using Polly.Timeout;
 
 namespace LedgerSync.Infrastructure.GoogleSheets;
 
@@ -29,14 +31,10 @@ internal sealed class AppsScriptGoogleSheetLogger(
             if (result is not { Ok: true })
                 throw new GoogleSheetDeliveryException($"Apps Script rejected the row: {result?.Error ?? "empty response"}.");
         }
-        catch (Exception ex) when (ex is HttpRequestException or JsonException
-                                   || (ex is OperationCanceledException && !cancellationToken.IsCancellationRequested)
-                                   || ex is Polly.Timeout.TimeoutRejectedException
-                                   || ex is Polly.CircuitBreaker.BrokenCircuitException)
+        catch (Exception ex) when (ex is HttpRequestException or JsonException or TimeoutRejectedException or BrokenCircuitException
+                                   || (ex is OperationCanceledException && !cancellationToken.IsCancellationRequested))
         {
             throw new GoogleSheetDeliveryException($"Google Sheets is unavailable: {ex.Message}", ex);
         }
     }
-
-    private sealed record AppsScriptResponse(bool Ok, string? Error);
 }

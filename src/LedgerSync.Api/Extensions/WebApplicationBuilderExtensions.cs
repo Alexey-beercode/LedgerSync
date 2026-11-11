@@ -50,12 +50,3 @@ public static class WebApplicationBuilderExtensions
         builder.Services.AddSingleton(new MockExternalScenarioState(initial));
     }
 }
-
-/// <summary>
-/// Health check tags.
-/// </summary>
-internal static class HealthTags
-{
-    /// <summary>Dependencies required to serve traffic (database).</summary>
-    public const string Ready = "ready";
-}

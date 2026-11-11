@@ -3,10 +3,11 @@ using LedgerSync.Application.Abstractions.Messaging;
 using LedgerSync.Application.Contracts.Orders;
 using LedgerSync.Application.Contracts.Sync;
 using LedgerSync.Application.Contracts.SyncLogs;
-using LedgerSync.Application.Features.Orders;
+using LedgerSync.Application.Features.Orders.GetOrderDocuments;
 using LedgerSync.Application.Features.Sync;
 using LedgerSync.Application.Features.Sync.SyncDocuments;
-using LedgerSync.Application.Features.SyncLogs;
+using LedgerSync.Application.Features.SyncLogs.GetSyncLogs;
+using LedgerSync.Application.Features.SyncLogs.ResendLatestSyncLog;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace LedgerSync.Application;

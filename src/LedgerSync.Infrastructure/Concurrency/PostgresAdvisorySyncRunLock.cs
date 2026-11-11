@@ -25,7 +25,7 @@ internal sealed class PostgresAdvisorySyncRunLock(
             command.Parameters.AddWithValue("key", LockKey);
 
             if (await command.ExecuteScalarAsync(cancellationToken) is true)
-                return new Handle(connection, logger);
+                return new AdvisoryLockHandle(connection, LockKey, logger);
 
             await connection.DisposeAsync();
             return null;
@@ -34,28 +34,6 @@ internal sealed class PostgresAdvisorySyncRunLock(
         {
             await connection.DisposeAsync();
             throw;
-        }
-    }
-
-    private sealed class Handle(NpgsqlConnection connection, ILogger logger) : IAsyncDisposable
-    {
-        public async ValueTask DisposeAsync()
-        {
-            try
-            {
-                await using var command = new NpgsqlCommand("SELECT pg_advisory_unlock(@key)", connection);
-                command.Parameters.AddWithValue("key", LockKey);
-                await command.ExecuteScalarAsync();
-            }
-            catch (Exception ex)
-            {
-                // Closing the connection below still releases the lock on the server side.
-                logger.LogWarning(ex, "Failed to release sync advisory lock explicitly");
-            }
-            finally
-            {
-                await connection.DisposeAsync();
-            }
         }
     }
 }

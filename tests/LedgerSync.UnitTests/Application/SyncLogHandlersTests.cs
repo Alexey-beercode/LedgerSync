@@ -1,6 +1,7 @@
 using FluentValidation;
 using LedgerSync.Application.Common.Exceptions;
-using LedgerSync.Application.Features.SyncLogs;
+using LedgerSync.Application.Features.SyncLogs.GetSyncLogs;
+using LedgerSync.Application.Features.SyncLogs.ResendLatestSyncLog;
 using LedgerSync.UnitTests.TestData;
 using static LedgerSync.UnitTests.TestData.Payloads;
 

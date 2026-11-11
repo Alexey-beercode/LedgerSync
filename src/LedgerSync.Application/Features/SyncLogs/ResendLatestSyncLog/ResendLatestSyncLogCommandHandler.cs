@@ -5,14 +5,11 @@ using LedgerSync.Application.Contracts.SyncLogs;
 using LedgerSync.Application.Features.Sync;
 using LedgerSync.Application.Mappings;
 
-namespace LedgerSync.Application.Features.SyncLogs;
+namespace LedgerSync.Application.Features.SyncLogs.ResendLatestSyncLog;
 
 /// <summary>
-/// Re-sends the latest sync run to Google Sheets (<c>POST /api/sync/logs/latest/send-to-google</c>).
-/// Idempotent: the sheet row is upserted by RunId.
+/// Delivers the latest finished run to Google Sheets again.
 /// </summary>
-public sealed record ResendLatestSyncLogCommand : ICommand<GoogleSheetResendResultDto>;
-
 public sealed class ResendLatestSyncLogCommandHandler(
     IUnitOfWork unitOfWork,
     GoogleSheetReporter googleSheetReporter) : ICommandHandler<ResendLatestSyncLogCommand, GoogleSheetResendResultDto>
