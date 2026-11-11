@@ -1,7 +1,8 @@
 using LedgerSync.Application.Contracts.Sync;
 using LedgerSync.Application.Features.Sync;
 using LedgerSync.Application.Features.Sync.SyncDocuments;
-using LedgerSync.Application.Features.SyncLogs;
+using LedgerSync.Application.Features.SyncLogs.GetSyncLogs;
+using LedgerSync.Application.Features.SyncLogs.ResendLatestSyncLog;
 using LedgerSync.Domain.Entities;
 using LedgerSync.Infrastructure.Persistence;
 using LedgerSync.UnitTests.Fakes;

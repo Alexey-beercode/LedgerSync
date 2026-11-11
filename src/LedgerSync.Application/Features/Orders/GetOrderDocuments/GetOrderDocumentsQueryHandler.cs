@@ -4,21 +4,12 @@ using LedgerSync.Application.Abstractions.Persistence;
 using LedgerSync.Application.Common.Exceptions;
 using LedgerSync.Application.Contracts.Orders;
 using LedgerSync.Application.Mappings;
-using LedgerSync.Domain.Common;
 
-namespace LedgerSync.Application.Features.Orders;
+namespace LedgerSync.Application.Features.Orders.GetOrderDocuments;
 
 /// <summary>
-/// Documents attached to an order (<c>GET /api/orders/{orderNumber}/documents</c>).
+/// Returns documents of an existing order.
 /// </summary>
-public sealed record GetOrderDocumentsQuery(string OrderNumber) : IQuery<OrderDocumentsDto>;
-
-public sealed class GetOrderDocumentsQueryValidator : AbstractValidator<GetOrderDocumentsQuery>
-{
-    public GetOrderDocumentsQueryValidator() =>
-        RuleFor(q => q.OrderNumber).NotEmpty().MaximumLength(FieldLimits.OrderNumber);
-}
-
 public sealed class GetOrderDocumentsQueryHandler(
     IUnitOfWork unitOfWork,
     IValidator<GetOrderDocumentsQuery> validator) : IQueryHandler<GetOrderDocumentsQuery, OrderDocumentsDto>

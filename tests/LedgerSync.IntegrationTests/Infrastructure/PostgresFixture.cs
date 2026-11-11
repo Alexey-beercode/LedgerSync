@@ -5,7 +5,7 @@ namespace LedgerSync.IntegrationTests.Infrastructure;
 
 /// <summary>
 /// Starts one real PostgreSQL container for all integration tests (requires Docker)
-/// and hosts the API on top of it with different Google Sheets modes.
+/// and hosts the API on top of it.
 /// </summary>
 public sealed class PostgresFixture : IAsyncLifetime
 {
@@ -13,56 +13,44 @@ public sealed class PostgresFixture : IAsyncLifetime
         .WithDatabase("ledgersync")
         .Build();
 
-    private readonly Dictionary<string, LedgerSyncApiFactory> _factories = [];
+    private LedgerSyncApiFactory? _api;
+    private LedgerSyncApiFactory? _apiWithGoogleDown;
 
-    public string ConnectionString => _container.GetConnectionString();
+    /// <summary>API host with a working mock Google Sheet.</summary>
+    public LedgerSyncApiFactory Api => _api ??= new LedgerSyncApiFactory(_container.GetConnectionString(), googleSheetsDown: false);
 
-    /// <summary>API host with the given <c>GoogleSheets:Mode</c>, created once and reused.</summary>
-    public LedgerSyncApiFactory Api(string googleSheetsMode = "File")
-    {
-        if (!_factories.TryGetValue(googleSheetsMode, out var factory))
-        {
-            factory = new LedgerSyncApiFactory(ConnectionString, googleSheetsMode);
-            _factories[googleSheetsMode] = factory;
-        }
-
-        return factory;
-    }
+    /// <summary>API host where Google Sheets always fails.</summary>
+    public LedgerSyncApiFactory ApiWithGoogleDown =>
+        _apiWithGoogleDown ??= new LedgerSyncApiFactory(_container.GetConnectionString(), googleSheetsDown: true);
 
     /// <summary>Removes synced data; seeded orders stay.</summary>
     public async Task ResetDatabaseAsync()
     {
         // Starting the host applies migrations, so the schema exists before truncating.
-        using var _ = Api().CreateClient();
+        using var _ = Api.CreateClient();
 
-        await using var connection = new NpgsqlConnection(ConnectionString);
-        await connection.OpenAsync();
-        await using var command = new NpgsqlCommand(
-            "TRUNCATE sync_log_errors, sync_logs, external_documents RESTART IDENTITY CASCADE", connection);
-        await command.ExecuteNonQueryAsync();
+        await ExecuteAsync("TRUNCATE sync_log_errors, sync_logs, external_documents RESTART IDENTITY CASCADE");
     }
 
-    public async Task<long> CountAsync(string sql)
-    {
-        await using var connection = new NpgsqlConnection(ConnectionString);
-        await connection.OpenAsync();
-        await using var command = new NpgsqlCommand(sql, connection);
-        return (long)(await command.ExecuteScalarAsync())!;
-    }
+    public async Task<long> CountAsync(string sql) => (long)(await ExecuteAsync(sql))!;
 
     public Task InitializeAsync() => _container.StartAsync();
 
     public async Task DisposeAsync()
     {
-        foreach (var factory in _factories.Values)
-            await factory.DisposeAsync();
+        if (_api is not null)
+            await _api.DisposeAsync();
+        if (_apiWithGoogleDown is not null)
+            await _apiWithGoogleDown.DisposeAsync();
 
         await _container.DisposeAsync();
     }
-}
 
-[CollectionDefinition(Name)]
-public sealed class PostgresCollection : ICollectionFixture<PostgresFixture>
-{
-    public const string Name = "Postgres";
+    private async Task<object?> ExecuteAsync(string sql)
+    {
+        await using var connection = new NpgsqlConnection(_container.GetConnectionString());
+        await connection.OpenAsync();
+        await using var command = new NpgsqlCommand(sql, connection);
+        return await command.ExecuteScalarAsync();
+    }
 }

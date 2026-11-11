@@ -28,10 +28,6 @@ internal sealed class UnitOfWork(LedgerSyncDbContext dbContext) : IUnitOfWork
         {
             return await dbContext.SaveChangesAsync(cancellationToken);
         }
-        catch (DbUpdateConcurrencyException ex)
-        {
-            throw new PersistenceConflictException("Data was modified concurrently by another process.", ex);
-        }
         catch (DbUpdateException ex) when (ex.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation } pg)
         {
             throw new PersistenceConflictException($"Unique constraint '{pg.ConstraintName}' was violated.", ex);

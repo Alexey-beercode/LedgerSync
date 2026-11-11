@@ -16,8 +16,3 @@ public sealed record SyncLogHistoryItemDto(
     string GoogleSheetStatus,
     string? GoogleSheetError,
     IReadOnlyList<SyncLogErrorDto> Errors);
-
-/// <summary>
-/// Problem with a single document within a sync run.
-/// </summary>
-public sealed record SyncLogErrorDto(string? ExternalId, string Reason);

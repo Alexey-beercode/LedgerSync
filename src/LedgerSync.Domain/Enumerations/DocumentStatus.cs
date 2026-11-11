@@ -9,17 +9,11 @@ namespace LedgerSync.Domain.Enumerations;
 /// </summary>
 public sealed class DocumentStatus : Enumeration<DocumentStatus>
 {
-    public static readonly DocumentStatus Created = new(1, nameof(Created), isTerminal: false);
-    public static readonly DocumentStatus Sent = new(2, nameof(Sent), isTerminal: false);
-    public static readonly DocumentStatus Signed = new(3, nameof(Signed), isTerminal: true);
-    public static readonly DocumentStatus Rejected = new(4, nameof(Rejected), isTerminal: true);
-    public static readonly DocumentStatus Cancelled = new(5, nameof(Cancelled), isTerminal: true);
+    public static readonly DocumentStatus Created = new(1, nameof(Created));
+    public static readonly DocumentStatus Sent = new(2, nameof(Sent));
+    public static readonly DocumentStatus Signed = new(3, nameof(Signed));
+    public static readonly DocumentStatus Rejected = new(4, nameof(Rejected));
+    public static readonly DocumentStatus Cancelled = new(5, nameof(Cancelled));
 
-    private DocumentStatus(int id, string name, bool isTerminal) : base(id, name)
-    {
-        IsTerminal = isTerminal;
-    }
-
-    /// <summary>True when the document lifecycle is normally finished in this status.</summary>
-    public bool IsTerminal { get; }
+    private DocumentStatus(int id, string name) : base(id, name) { }
 }

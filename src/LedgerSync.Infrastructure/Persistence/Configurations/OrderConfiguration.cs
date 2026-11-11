@@ -21,8 +21,6 @@ internal sealed class OrderConfiguration : IEntityTypeConfiguration<Order>
         // Business key: one order per number.
         builder.HasIndex(o => o.OrderNumber).IsUnique();
 
-        builder.Navigation(o => o.Documents).UsePropertyAccessMode(PropertyAccessMode.Field);
-
         // Demo orders. ORD-404 is intentionally absent to show the "unknown order" scenario.
         builder.HasData(
             Seed("6f1f6c1e-0b8a-4a53-9a39-1d5f5d0a0001", "ORD-001", "Alpha Logistics LLP"),

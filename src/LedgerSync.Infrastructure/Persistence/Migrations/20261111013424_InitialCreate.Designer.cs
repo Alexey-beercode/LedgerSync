@@ -12,7 +12,7 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace LedgerSync.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(LedgerSyncDbContext))]
-    [Migration("20261111005147_InitialCreate")]
+    [Migration("20261111013424_InitialCreate")]
     partial class InitialCreate
     {
         /// <inheritdoc />
@@ -88,12 +88,6 @@ namespace LedgerSync.Infrastructure.Persistence.Migrations
                     b.Property<DateTimeOffset>("UpdatedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("updated_at");
-
-                    b.Property<uint>("Version")
-                        .IsConcurrencyToken()
-                        .ValueGeneratedOnAddOrUpdate()
-                        .HasColumnType("xid")
-                        .HasColumnName("xmin");
 
                     b.HasKey("Id")
                         .HasName("pk_external_documents");
@@ -225,12 +219,6 @@ namespace LedgerSync.Infrastructure.Persistence.Migrations
                         .HasColumnType("character varying(32)")
                         .HasColumnName("status");
 
-                    b.Property<uint>("Version")
-                        .IsConcurrencyToken()
-                        .ValueGeneratedOnAddOrUpdate()
-                        .HasColumnType("xid")
-                        .HasColumnName("xmin");
-
                     b.HasKey("Id")
                         .HasName("pk_sync_logs");
 
@@ -273,14 +261,12 @@ namespace LedgerSync.Infrastructure.Persistence.Migrations
 
             modelBuilder.Entity("LedgerSync.Domain.Entities.ExternalDocument", b =>
                 {
-                    b.HasOne("LedgerSync.Domain.Entities.Order", "Order")
-                        .WithMany("Documents")
+                    b.HasOne("LedgerSync.Domain.Entities.Order", null)
+                        .WithMany()
                         .HasForeignKey("OrderId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired()
                         .HasConstraintName("fk_external_documents_orders_order_id");
-
-                    b.Navigation("Order");
                 });
 
             modelBuilder.Entity("LedgerSync.Domain.Entities.SyncLogError", b =>
@@ -291,11 +277,6 @@ namespace LedgerSync.Infrastructure.Persistence.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired()
                         .HasConstraintName("fk_sync_log_errors_sync_logs_sync_log_id");
-                });
-
-            modelBuilder.Entity("LedgerSync.Domain.Entities.Order", b =>
-                {
-                    b.Navigation("Documents");
                 });
 
             modelBuilder.Entity("LedgerSync.Domain.Entities.SyncLog", b =>

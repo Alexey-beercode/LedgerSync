@@ -16,7 +16,7 @@ namespace LedgerSync.IntegrationTests;
 [Collection(PostgresCollection.Name)]
 public sealed class SyncApiTests(PostgresFixture postgres) : IAsyncLifetime
 {
-    private readonly HttpClient _client = postgres.Api().CreateClient();
+    private readonly HttpClient _client = postgres.Api.CreateClient();
 
     public async Task InitializeAsync()
     {
@@ -88,7 +88,7 @@ public sealed class SyncApiTests(PostgresFixture postgres) : IAsyncLifetime
     [Fact]
     public async Task Sync_WhileAnotherRunHoldsLock_Returns409()
     {
-        var syncLock = postgres.Api().Services.GetRequiredService<ISyncRunLock>();
+        var syncLock = postgres.Api.Services.GetRequiredService<ISyncRunLock>();
         await using var held = await syncLock.TryAcquireAsync(CancellationToken.None);
         Assert.NotNull(held);
 
@@ -104,7 +104,7 @@ public sealed class SyncApiTests(PostgresFixture postgres) : IAsyncLifetime
         var result = await SyncAsync();
         await _client.PostAsync("/api/sync/logs/latest/send-to-google", null);
 
-        var rows = await File.ReadAllLinesAsync(postgres.Api().SheetPath);
+        var rows = await File.ReadAllLinesAsync(postgres.Api.SheetPath);
         Assert.Single(rows, r => r.StartsWith(result.RunId.ToString()));
     }
 

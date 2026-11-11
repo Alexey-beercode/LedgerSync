@@ -38,8 +38,5 @@ internal sealed class SyncLogConfiguration : IEntityTypeConfiguration<SyncLog>
             .OnDelete(DeleteBehavior.Cascade);
 
         builder.Navigation(s => s.Errors).UsePropertyAccessMode(PropertyAccessMode.Field);
-
-        // Optimistic concurrency via PostgreSQL system column xmin.
-        builder.Property<uint>("Version").IsRowVersion();
     }
 }

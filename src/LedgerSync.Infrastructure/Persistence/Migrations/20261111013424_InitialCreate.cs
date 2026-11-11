@@ -42,8 +42,7 @@ namespace LedgerSync.Infrastructure.Persistence.Migrations
                     error_message = table.Column<string>(type: "character varying(2000)", maxLength: 2000, nullable: true),
                     google_sheet_status = table.Column<string>(type: "character varying(32)", maxLength: 32, nullable: false),
                     google_sheet_error = table.Column<string>(type: "character varying(2000)", maxLength: 2000, nullable: true),
-                    google_sheet_sent_at = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
-                    xmin = table.Column<uint>(type: "xid", rowVersion: true, nullable: false)
+                    google_sheet_sent_at = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true)
                 },
                 constraints: table =>
                 {
@@ -65,8 +64,7 @@ namespace LedgerSync.Infrastructure.Persistence.Migrations
                     status = table.Column<string>(type: "character varying(32)", maxLength: 32, nullable: false),
                     external_updated_at = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
                     created_at = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
-                    updated_at = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
-                    xmin = table.Column<uint>(type: "xid", rowVersion: true, nullable: false)
+                    updated_at = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false)
                 },
                 constraints: table =>
                 {

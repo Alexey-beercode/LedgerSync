@@ -37,12 +37,9 @@ internal sealed class ExternalDocumentConfiguration : IEntityTypeConfiguration<E
         // Fast lookup for GET /api/orders/{orderNumber}/documents.
         builder.HasIndex(d => d.OrderNumber);
 
-        builder.HasOne(d => d.Order)
-            .WithMany(o => o.Documents)
+        builder.HasOne<Order>()
+            .WithMany()
             .HasForeignKey(d => d.OrderId)
             .OnDelete(DeleteBehavior.Restrict);
-
-        // Optimistic concurrency via PostgreSQL system column xmin.
-        builder.Property<uint>("Version").IsRowVersion();
     }
 }

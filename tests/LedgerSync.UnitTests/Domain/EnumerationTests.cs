@@ -32,10 +32,9 @@ public sealed class EnumerationTests
         Assert.False(SyncStatus.TryFromName(null, out _));
 
     [Fact]
-    public void Equality_IsBasedOnValueAndType()
+    public void Equality_IsBasedOnValue()
     {
-        Assert.True(DocumentStatus.FromId(3) == DocumentStatus.Signed);
-        Assert.True(DocumentStatus.Signed.IsTerminal);
-        Assert.False(DocumentStatus.Sent.IsTerminal);
+        Assert.True(DocumentStatus.FromName("signed") == DocumentStatus.Signed);
+        Assert.True(DocumentStatus.Sent != DocumentStatus.Signed);
     }
 }

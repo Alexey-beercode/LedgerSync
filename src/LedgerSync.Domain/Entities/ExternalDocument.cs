@@ -14,6 +14,7 @@ public sealed class ExternalDocument : Entity
     /// <summary>Document identifier in the external system.</summary>
     public string ExternalId { get; private set; } = null!;
 
+    /// <summary>Owning order. Only the key is kept, so saving a document never touches the order row.</summary>
     public Guid OrderId { get; private set; }
 
     /// <summary>Order number the document belongs to.</summary>
@@ -38,9 +39,6 @@ public sealed class ExternalDocument : Entity
 
     /// <summary>When the record was last updated in the internal system (UTC).</summary>
     public DateTimeOffset UpdatedAt { get; private set; }
-
-    // Only the foreign key is set on creation, so adding a document never re-inserts its order.
-    public Order Order { get; private set; } = null!;
 
     // Required by EF Core.
     private ExternalDocument() { }

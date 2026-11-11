@@ -26,7 +26,7 @@ public sealed class ReliabilityTests(PostgresFixture postgres) : IAsyncLifetime
     [Fact]
     public async Task UniqueIndex_RejectsSecondDocumentWithSameExternalId()
     {
-        var services = postgres.Api().Services;
+        var services = postgres.Api.Services;
         var order = await GetOrderAsync(services, "ORD-001");
 
         await AddDocumentAsync(services, order);
@@ -39,7 +39,7 @@ public sealed class ReliabilityTests(PostgresFixture postgres) : IAsyncLifetime
     [Fact]
     public async Task AdvisoryLock_IsExclusiveAcrossConnectionsAndReleasedOnDispose()
     {
-        var syncLock = postgres.Api().Services.GetRequiredService<ISyncRunLock>();
+        var syncLock = postgres.Api.Services.GetRequiredService<ISyncRunLock>();
 
         await using (var first = await syncLock.TryAcquireAsync(CancellationToken.None))
         {
@@ -54,7 +54,7 @@ public sealed class ReliabilityTests(PostgresFixture postgres) : IAsyncLifetime
     [Fact]
     public async Task GoogleSheetsDown_DocumentsStaySavedAndRunCanBeResent()
     {
-        var client = postgres.Api("Unavailable").CreateClient();
+        var client = postgres.ApiWithGoogleDown.CreateClient();
         (await client.PutAsync("/mock/external/scenario/Baseline", null)).EnsureSuccessStatusCode();
 
         var response = await client.PostAsync("/api/sync/documents", null);

@@ -35,18 +35,3 @@ public sealed class GoogleSheetsOptions : IValidatableObject
             yield return new ValidationResult("FilePath is required in File mode.", [nameof(FilePath)]);
     }
 }
-
-/// <summary>
-/// Which <c>IGoogleSheetLogger</c> implementation is used.
-/// </summary>
-public enum GoogleSheetsMode
-{
-    /// <summary>Mock: rows are written to a local CSV file shaped like the sheet.</summary>
-    File,
-
-    /// <summary>Real integration: HTTP POST to a Google Apps Script Web App.</summary>
-    AppsScript,
-
-    /// <summary>Demo mode that always fails, to show error handling and manual resend.</summary>
-    Unavailable
-}
