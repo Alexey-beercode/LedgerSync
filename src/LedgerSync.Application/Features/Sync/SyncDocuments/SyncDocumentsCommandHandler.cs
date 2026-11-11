@@ -76,10 +76,13 @@ public sealed class SyncDocumentsCommandHandler(
         {
             payloads = await externalClient.FetchDocumentsAsync(token);
         }
-        catch (ExternalSourceException ex)
+        catch (Exception ex)
         {
+            // Expected source failures carry a clear message; anything else (e.g. a client bug or bad URL)
+            // must still finish the run as Failed instead of leaving it Running behind a 500.
             logger.ExternalSourceFailed(ex, syncLog.Id);
-            syncLog.Fail(ex.Message, timeProvider.GetUtcNow());
+            var reason = ex is ExternalSourceException ? ex.Message : $"External source call failed unexpectedly: {ex.Message}";
+            syncLog.Fail(reason, timeProvider.GetUtcNow());
             await unitOfWork.SaveChangesAsync(token);
             return syncLog;
         }
