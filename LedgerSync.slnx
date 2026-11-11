@@ -6,6 +6,7 @@
     <Project Path="src/LedgerSync.Infrastructure/LedgerSync.Infrastructure.csproj" />
   </Folder>
   <Folder Name="/tests/">
-    <Project Path="tests/LedgerSync.Tests/LedgerSync.Tests.csproj" />
+    <Project Path="tests/LedgerSync.IntegrationTests/LedgerSync.IntegrationTests.csproj" />
+    <Project Path="tests/LedgerSync.UnitTests/LedgerSync.UnitTests.csproj" />
   </Folder>
 </Solution>

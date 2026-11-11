@@ -19,4 +19,10 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
 
+  <ItemGroup>
+    <!-- Tests use internal repositories and unit of work directly. -->
+    <InternalsVisibleTo Include="LedgerSync.UnitTests" />
+    <InternalsVisibleTo Include="LedgerSync.IntegrationTests" />
+  </ItemGroup>
+
 </Project>
