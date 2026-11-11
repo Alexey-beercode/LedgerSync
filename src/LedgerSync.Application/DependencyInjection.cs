@@ -13,6 +13,9 @@ public static class DependencyInjection
 {
     public static IServiceCollection AddApplication(this IServiceCollection services)
     {
+        // Error messages are stored in SyncLog and returned by the API: keep them in English regardless of server locale.
+        ValidatorOptions.Global.LanguageManager.Enabled = false;
+
         services.AddValidatorsFromAssembly(typeof(DependencyInjection).Assembly, ServiceLifetime.Singleton);
 
         services.AddScoped<GoogleSheetReporter>();

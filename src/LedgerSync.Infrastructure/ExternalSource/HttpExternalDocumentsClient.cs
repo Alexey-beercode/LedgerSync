@@ -71,7 +71,9 @@ internal sealed class HttpExternalDocumentsClient(
             }
             catch (JsonException ex)
             {
-                documents.Add(ExternalDocumentPayload.Unreadable(TryReadExternalId(item), $"Item cannot be read: {ex.Message}"));
+                // Only the JSON path is reported: the raw exception text exposes internal type names.
+                var field = string.IsNullOrEmpty(ex.Path) ? "item" : $"field '{ex.Path.TrimStart('$', '.')}'";
+                documents.Add(ExternalDocumentPayload.Unreadable(TryReadExternalId(item), $"Document cannot be read: {field} has an invalid value."));
             }
         }
 

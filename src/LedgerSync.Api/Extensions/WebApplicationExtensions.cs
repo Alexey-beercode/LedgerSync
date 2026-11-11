@@ -1,5 +1,7 @@
 using LedgerSync.Infrastructure.Persistence;
+using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Options;
+using Scalar.AspNetCore;
 
 namespace LedgerSync.Api.Extensions;
 
@@ -20,11 +22,30 @@ public static class WebApplicationExtensions
 
     public static WebApplication UseLedgerSyncPipeline(this WebApplication app)
     {
-        if (app.Environment.IsDevelopment())
-            app.MapOpenApi();
+        app.UseExceptionHandler();
+        app.UseStatusCodePages();
 
+        if (app.Environment.IsDevelopment() || app.Configuration.GetValue<bool>("OpenApi:Enabled"))
+        {
+            app.MapOpenApi();
+            app.MapScalarApiReference(options => options.WithTitle("LedgerSync API"));
+        }
+
+        app.MapHealthEndpoints();
         app.MapControllers();
 
         return app;
+    }
+
+    /// <summary>
+    /// Liveness: the process responds. Readiness: the database is reachable.
+    /// </summary>
+    private static void MapHealthEndpoints(this WebApplication app)
+    {
+        app.MapHealthChecks("/health/live", new HealthCheckOptions { Predicate = _ => false });
+        app.MapHealthChecks("/health/ready", new HealthCheckOptions
+        {
+            Predicate = check => check.Tags.Contains(HealthTags.Ready)
+        });
     }
 }
