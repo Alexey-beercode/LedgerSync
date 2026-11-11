@@ -1,5 +1,5 @@
 using LedgerSync.Application.Contracts.ExternalSource;
-using LedgerSync.Application.Validation;
+using LedgerSync.Application.Features.Sync.SyncDocuments;
 using Microsoft.Extensions.Time.Testing;
 using static LedgerSync.UnitTests.TestData.Payloads;
 

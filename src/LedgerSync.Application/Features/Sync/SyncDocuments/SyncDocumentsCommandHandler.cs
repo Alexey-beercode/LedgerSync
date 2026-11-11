@@ -2,20 +2,20 @@ using System.Diagnostics;
 using FluentValidation;
 using LedgerSync.Application.Abstractions.Concurrency;
 using LedgerSync.Application.Abstractions.ExternalSource;
+using LedgerSync.Application.Abstractions.Messaging;
 using LedgerSync.Application.Abstractions.Persistence;
 using LedgerSync.Application.Common.Exceptions;
 using LedgerSync.Application.Contracts.ExternalSource;
 using LedgerSync.Application.Contracts.Sync;
 using LedgerSync.Application.Logging;
 using LedgerSync.Application.Mappings;
-using LedgerSync.Application.Services;
 using LedgerSync.Domain.Entities;
 using Microsoft.Extensions.Logging;
 
-namespace LedgerSync.Application.Sync;
+namespace LedgerSync.Application.Features.Sync.SyncDocuments;
 
 /// <summary>
-/// Orchestrates one synchronization run.
+/// Executes one synchronization run.
 /// <para>Reliability rules:</para>
 /// <list type="bullet">
 /// <item>Only one run at a time (<see cref="ISyncRunLock"/>), parallel calls get <see cref="SyncAlreadyRunningException"/>.</item>
@@ -25,21 +25,18 @@ namespace LedgerSync.Application.Sync;
 /// <item>Once started, a run is not bound to the HTTP request: a client disconnect cannot leave it half-done.</item>
 /// </list>
 /// </summary>
-public sealed class DocumentSyncService(
+public sealed class SyncDocumentsCommandHandler(
     ISyncRunLock syncRunLock,
     IExternalDocumentsClient externalClient,
-    IOrderRepository orders,
-    IExternalDocumentRepository documents,
-    ISyncLogRepository syncLogs,
     IUnitOfWork unitOfWork,
     IValidator<ExternalDocumentPayload> payloadValidator,
     GoogleSheetReporter googleSheetReporter,
     TimeProvider timeProvider,
-    ILogger<DocumentSyncService> logger) : IDocumentSyncService
+    ILogger<SyncDocumentsCommandHandler> logger) : ICommandHandler<SyncDocumentsCommand, SyncResultDto>
 {
     private const string InterruptedRunMessage = "Run was interrupted before completion (process stopped or crashed).";
 
-    public async Task<SyncResultDto> RunAsync(CancellationToken cancellationToken)
+    public async Task<SyncResultDto> HandleAsync(SyncDocumentsCommand command, CancellationToken cancellationToken)
     {
         await using var runLock = await syncRunLock.TryAcquireAsync(cancellationToken);
         if (runLock is null)
@@ -55,7 +52,7 @@ public sealed class DocumentSyncService(
         await RecoverInterruptedRunsAsync(token);
 
         var syncLog = SyncLog.Start(timeProvider.GetUtcNow());
-        syncLogs.Add(syncLog);
+        unitOfWork.SyncLogs.Add(syncLog);
         await unitOfWork.SaveChangesAsync(token);
 
         // Every log entry of this run carries RunId, so one run can be traced end to end.
@@ -131,8 +128,10 @@ public sealed class DocumentSyncService(
         var batch = DeduplicateBatch(syncLog, validDocuments);
 
         // Two queries for the whole batch instead of two per document.
-        var knownOrders = await orders.GetByNumbersAsync(batch.Select(d => d.OrderNumber).Distinct().ToList(), token);
-        var existingDocuments = await documents.GetByExternalIdsAsync(batch.Select(d => d.ExternalId).ToList(), token);
+        var knownOrders = await unitOfWork.Orders.GetByNumbersAsync(
+            batch.Select(d => d.OrderNumber).Distinct().ToList(), token);
+        var existingDocuments = await unitOfWork.Documents.GetByExternalIdsAsync(
+            batch.Select(d => d.ExternalId).ToList(), token);
 
         var now = timeProvider.GetUtcNow();
         foreach (var incoming in batch)
@@ -147,7 +146,7 @@ public sealed class DocumentSyncService(
 
             if (!existingDocuments.TryGetValue(incoming.ExternalId, out var existing))
             {
-                documents.Add(ExternalDocument.Create(
+                unitOfWork.Documents.Add(ExternalDocument.Create(
                     incoming.ExternalId, order, incoming.DocumentType, incoming.DocumentNumber,
                     incoming.Amount, incoming.Currency, incoming.Status, incoming.ExternalUpdatedAt, now));
                 syncLog.RecordCreated();
@@ -202,7 +201,7 @@ public sealed class DocumentSyncService(
     {
         unitOfWork.DiscardChanges();
 
-        var syncLog = await syncLogs.GetByIdAsync(runId, token)
+        var syncLog = await unitOfWork.SyncLogs.GetByIdAsync(runId, token)
                       ?? throw new InvalidOperationException($"Sync run {runId} disappeared from the database.");
 
         syncLog.SetReceived(received);
@@ -217,7 +216,7 @@ public sealed class DocumentSyncService(
     /// </summary>
     private async Task RecoverInterruptedRunsAsync(CancellationToken token)
     {
-        var interrupted = await syncLogs.GetRunningAsync(token);
+        var interrupted = await unitOfWork.SyncLogs.GetRunningAsync(token);
         if (interrupted.Count == 0)
             return;
 

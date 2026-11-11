@@ -74,16 +74,17 @@ public sealed class ReliabilityTests(PostgresFixture postgres) : IAsyncLifetime
     private static async Task<Order> GetOrderAsync(IServiceProvider services, string orderNumber)
     {
         await using var scope = services.CreateAsyncScope();
-        var orders = scope.ServiceProvider.GetRequiredService<IOrderRepository>();
-        return (await orders.GetByNumberAsync(orderNumber, CancellationToken.None))!;
+        var unitOfWork = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        return (await unitOfWork.Orders.GetByNumberAsync(orderNumber, CancellationToken.None))!;
     }
 
     // Each insert uses its own scope, as two independent processes would.
     private static async Task AddDocumentAsync(IServiceProvider services, Order order)
     {
         await using var scope = services.CreateAsyncScope();
-        scope.ServiceProvider.GetRequiredService<IExternalDocumentRepository>().Add(ExternalDocument.Create(
+        var unitOfWork = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        unitOfWork.Documents.Add(ExternalDocument.Create(
             "EXT-DUP-1", order, DocumentType.Invoice, "INV-DUP", 10m, "KZT", DocumentStatus.Created, Now, Now));
-        await scope.ServiceProvider.GetRequiredService<IUnitOfWork>().SaveChangesAsync(CancellationToken.None);
+        await unitOfWork.SaveChangesAsync(CancellationToken.None);
     }
 }
