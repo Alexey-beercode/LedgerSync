@@ -3,7 +3,7 @@ using LedgerSync.Application.Contracts.ExternalSource;
 using LedgerSync.Domain.Common;
 using LedgerSync.Domain.Enumerations;
 
-namespace LedgerSync.Application.Validation;
+namespace LedgerSync.Application.Features.Sync.SyncDocuments;
 
 /// <summary>
 /// Validates a single untrusted document from the external system before it touches the domain.

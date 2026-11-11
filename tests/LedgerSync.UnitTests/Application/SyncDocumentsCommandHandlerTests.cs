@@ -8,16 +8,16 @@ using static LedgerSync.UnitTests.TestData.Payloads;
 namespace LedgerSync.UnitTests.Application;
 
 /// <summary>
-/// Sync use case against real repositories (EF Core in-memory) with stubbed external systems.
+/// Sync command handler against real repositories (EF Core in-memory) with stubbed external systems.
 /// Tests 1–7 cover the mandatory scenarios of the assignment, the rest cover reliability rules.
 /// </summary>
-public sealed class DocumentSyncServiceTests
+public sealed class SyncDocumentsCommandHandlerTests
 {
     private readonly SyncTestHost _host = new();
 
     // 1. Repeated sync with the same data does not create duplicates.
     [Fact]
-    public async Task RunAsync_SameDataTwice_DoesNotCreateDuplicates()
+    public async Task Handle_SameDataTwice_DoesNotCreateDuplicates()
     {
         _host.ExternalSource.Returns(Document("EXT-INV-001"), Document("EXT-ACT-001", documentType: "ActOfWork"));
 
@@ -33,7 +33,7 @@ public sealed class DocumentSyncServiceTests
 
     // 2. A new external document is created.
     [Fact]
-    public async Task RunAsync_NewDocument_IsCreatedWithAllFields()
+    public async Task Handle_NewDocument_IsCreatedWithAllFields()
     {
         _host.ExternalSource.Returns(Document("EXT-INV-001", amount: 150_000.50m, status: "Sent"));
 
@@ -51,7 +51,7 @@ public sealed class DocumentSyncServiceTests
 
     // 3. A status change updates the internal document.
     [Fact]
-    public async Task RunAsync_StatusChanged_UpdatesDocument()
+    public async Task Handle_StatusChanged_UpdatesDocument()
     {
         _host.ExternalSource.Returns(Document(status: "Created"));
         await _host.RunSyncAsync();
@@ -68,7 +68,7 @@ public sealed class DocumentSyncServiceTests
 
     // 4. A document of a non-existent order is rejected and recorded in SyncLog errors.
     [Fact]
-    public async Task RunAsync_UnknownOrder_RejectsDocumentAndKeepsOthers()
+    public async Task Handle_UnknownOrder_RejectsDocumentAndKeepsOthers()
     {
         _host.ExternalSource.Returns(Document("EXT-INV-001"), Document("EXT-INV-404", orderNumber: "ORD-404"));
 
@@ -87,7 +87,7 @@ public sealed class DocumentSyncServiceTests
     // 5. An external source error is saved in SyncLog.
     [Theory]
     [MemberData(nameof(SourceErrors))]
-    public async Task RunAsync_ExternalSourceFails_RecordsFailedRun(Exception sourceError)
+    public async Task Handle_ExternalSourceFails_RecordsFailedRun(Exception sourceError)
     {
         _host.ExternalSource.Throws(sourceError);
 
@@ -108,7 +108,7 @@ public sealed class DocumentSyncServiceTests
 
     // 6. A successful run is sent to IGoogleSheetLogger.
     [Fact]
-    public async Task RunAsync_Success_SendsRunToGoogleSheets()
+    public async Task Handle_Success_SendsRunToGoogleSheets()
     {
         _host.ExternalSource.Returns(Document("EXT-INV-001"), Document("EXT-INV-002", orderNumber: "ORD-002"));
 
@@ -125,7 +125,7 @@ public sealed class DocumentSyncServiceTests
 
     // 7. A Google Sheets error does not roll back saved documents.
     [Fact]
-    public async Task RunAsync_GoogleSheetsUnavailable_KeepsDocumentsAndRecordsDeliveryFailure()
+    public async Task Handle_GoogleSheetsUnavailable_KeepsDocumentsAndRecordsDeliveryFailure()
     {
         _host.GoogleSheets.IsUnavailable = true;
         _host.ExternalSource.Returns(Document("EXT-INV-001"));
@@ -142,7 +142,7 @@ public sealed class DocumentSyncServiceTests
     }
 
     [Fact]
-    public async Task RunAsync_DatabaseSaveFails_RollsBackAllDocumentsAndRecordsFailedRun()
+    public async Task Handle_DatabaseSaveFails_RollsBackAllDocumentsAndRecordsFailedRun()
     {
         _host.SaveInterceptor.FailDocumentSaves = true;
         _host.ExternalSource.Returns(Document("EXT-INV-001"), Document("EXT-INV-002", orderNumber: "ORD-002"));
@@ -160,7 +160,7 @@ public sealed class DocumentSyncServiceTests
     }
 
     [Fact]
-    public async Task RunAsync_OlderVersionOfKnownDocument_IsIgnored()
+    public async Task Handle_OlderVersionOfKnownDocument_IsIgnored()
     {
         _host.ExternalSource.Returns(Document(status: "Signed", updatedAt: BaseTime));
         await _host.RunSyncAsync();
@@ -173,7 +173,7 @@ public sealed class DocumentSyncServiceTests
     }
 
     [Fact]
-    public async Task RunAsync_SameDocumentTwiceInBatch_StoresLatestVersionOnce()
+    public async Task Handle_SameDocumentTwiceInBatch_StoresLatestVersionOnce()
     {
         _host.ExternalSource.Returns(
             Document(status: "Created", updatedAt: BaseTime),
@@ -188,7 +188,7 @@ public sealed class DocumentSyncServiceTests
     }
 
     [Fact]
-    public async Task RunAsync_InvalidItems_AreRejectedWhileValidOnesAreSaved()
+    public async Task Handle_InvalidItems_AreRejectedWhileValidOnesAreSaved()
     {
         _host.ExternalSource.Returns(
             Document("EXT-INV-001"),
@@ -207,7 +207,7 @@ public sealed class DocumentSyncServiceTests
     }
 
     [Fact]
-    public async Task RunAsync_AnotherRunInProgress_IsRejectedWithoutTouchingSource()
+    public async Task Handle_AnotherRunInProgress_IsRejectedWithoutTouchingSource()
     {
         await using var heldLock = await _host.SyncLock.TryAcquireAsync(CancellationToken.None);
 
@@ -216,7 +216,7 @@ public sealed class DocumentSyncServiceTests
     }
 
     [Fact]
-    public async Task RunAsync_RunLeftRunningAfterCrash_IsMarkedAsFailed()
+    public async Task Handle_RunLeftRunningAfterCrash_IsMarkedAsFailed()
     {
         var crashed = SyncLog.Start(_host.Time.GetUtcNow().AddHours(-1));
         await using (var db = _host.CreateDbContext())
@@ -234,7 +234,7 @@ public sealed class DocumentSyncServiceTests
     }
 
     [Fact]
-    public async Task RunAsync_AnyOutcome_CountersAddUpToReceived()
+    public async Task Handle_AnyOutcome_CountersAddUpToReceived()
     {
         _host.ExternalSource.Returns(Document("EXT-1"), Document("EXT-2", orderNumber: "ORD-404"), Document("EXT-1"));
         await _host.RunSyncAsync();

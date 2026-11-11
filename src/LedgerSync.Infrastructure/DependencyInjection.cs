@@ -6,7 +6,6 @@ using LedgerSync.Infrastructure.Concurrency;
 using LedgerSync.Infrastructure.ExternalSource;
 using LedgerSync.Infrastructure.GoogleSheets;
 using LedgerSync.Infrastructure.Persistence;
-using LedgerSync.Infrastructure.Persistence.Repositories;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -55,10 +54,8 @@ public static class DependencyInjection
                 .UseSnakeCaseNamingConvention();
         });
 
+        // Repositories are reached only through the unit of work.
         services.AddScoped<IUnitOfWork, UnitOfWork>();
-        services.AddScoped<IOrderRepository, OrderRepository>();
-        services.AddScoped<IExternalDocumentRepository, ExternalDocumentRepository>();
-        services.AddScoped<ISyncLogRepository, SyncLogRepository>();
         services.AddSingleton<ISyncRunLock, PostgresAdvisorySyncRunLock>();
     }
 

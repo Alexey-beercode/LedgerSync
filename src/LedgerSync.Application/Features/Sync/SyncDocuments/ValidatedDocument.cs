@@ -1,7 +1,7 @@
 using LedgerSync.Application.Contracts.ExternalSource;
 using LedgerSync.Domain.Enumerations;
 
-namespace LedgerSync.Application.Sync;
+namespace LedgerSync.Application.Features.Sync.SyncDocuments;
 
 /// <summary>
 /// External document after validation: all fields are present and strongly typed.

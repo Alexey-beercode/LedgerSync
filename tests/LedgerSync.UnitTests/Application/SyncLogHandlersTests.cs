@@ -1,12 +1,15 @@
 using FluentValidation;
 using LedgerSync.Application.Common.Exceptions;
-using LedgerSync.Application.Contracts.SyncLogs;
+using LedgerSync.Application.Features.SyncLogs;
 using LedgerSync.UnitTests.TestData;
 using static LedgerSync.UnitTests.TestData.Payloads;
 
 namespace LedgerSync.UnitTests.Application;
 
-public sealed class SyncLogServiceTests
+/// <summary>
+/// GetSyncLogs query and ResendLatestSyncLog command.
+/// </summary>
+public sealed class SyncLogHandlersTests
 {
     private readonly SyncTestHost _host = new();
 
@@ -19,7 +22,7 @@ public sealed class SyncLogServiceTests
 
         _host.GoogleSheets.IsUnavailable = false;
         await using var db = _host.CreateDbContext();
-        var result = await _host.CreateSyncLogService(db).ResendLatestToGoogleAsync(CancellationToken.None);
+        var result = await _host.CreateResendHandler(db).HandleAsync(new ResendLatestSyncLogCommand(), CancellationToken.None);
 
         Assert.Equal(run.RunId, result.RunId);
         Assert.Equal("Sent", result.GoogleSheetStatus);
@@ -32,11 +35,11 @@ public sealed class SyncLogServiceTests
         await using var db = _host.CreateDbContext();
 
         await Assert.ThrowsAsync<SyncRunNotFoundException>(() =>
-            _host.CreateSyncLogService(db).ResendLatestToGoogleAsync(CancellationToken.None));
+            _host.CreateResendHandler(db).HandleAsync(new ResendLatestSyncLogCommand(), CancellationToken.None));
     }
 
     [Fact]
-    public async Task GetRecent_ReturnsNewestFirstWithErrors()
+    public async Task GetSyncLogs_ReturnsNewestFirstWithErrors()
     {
         _host.ExternalSource.Returns(Document());
         var first = await _host.RunSyncAsync();
@@ -45,7 +48,7 @@ public sealed class SyncLogServiceTests
         var second = await _host.RunSyncAsync();
 
         await using var db = _host.CreateDbContext();
-        var history = await _host.CreateSyncLogService(db).GetRecentAsync(new SyncLogsQuery(10), CancellationToken.None);
+        var history = await _host.CreateGetSyncLogsHandler(db).HandleAsync(new GetSyncLogsQuery(10), CancellationToken.None);
 
         Assert.Equal([second.RunId, first.RunId], history.Select(h => h.RunId));
         Assert.Single(history[0].Errors);
@@ -54,11 +57,11 @@ public sealed class SyncLogServiceTests
     [Theory]
     [InlineData(0)]
     [InlineData(101)]
-    public async Task GetRecent_TakeOutOfRange_ThrowsValidation(int take)
+    public async Task GetSyncLogs_TakeOutOfRange_ThrowsValidation(int take)
     {
         await using var db = _host.CreateDbContext();
 
         await Assert.ThrowsAsync<ValidationException>(() =>
-            _host.CreateSyncLogService(db).GetRecentAsync(new SyncLogsQuery(take), CancellationToken.None));
+            _host.CreateGetSyncLogsHandler(db).HandleAsync(new GetSyncLogsQuery(take), CancellationToken.None));
     }
 }

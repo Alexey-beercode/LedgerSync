@@ -5,7 +5,7 @@ using LedgerSync.Application.Mappings;
 using LedgerSync.Domain.Entities;
 using Microsoft.Extensions.Logging;
 
-namespace LedgerSync.Application.Sync;
+namespace LedgerSync.Application.Features.Sync;
 
 /// <summary>
 /// Sends a finished run to Google Sheets and stores the delivery result.

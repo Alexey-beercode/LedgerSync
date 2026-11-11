@@ -1,9 +1,9 @@
 using LedgerSync.Application.Contracts.Sync;
-using LedgerSync.Application.Sync;
-using LedgerSync.Application.Validation;
+using LedgerSync.Application.Features.Sync;
+using LedgerSync.Application.Features.Sync.SyncDocuments;
+using LedgerSync.Application.Features.SyncLogs;
 using LedgerSync.Domain.Entities;
 using LedgerSync.Infrastructure.Persistence;
-using LedgerSync.Infrastructure.Persistence.Repositories;
 using LedgerSync.UnitTests.Fakes;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
@@ -13,7 +13,7 @@ using Microsoft.Extensions.Time.Testing;
 namespace LedgerSync.UnitTests.TestData;
 
 /// <summary>
-/// Wires the real sync use case and repositories to an isolated in-memory database and test doubles.
+/// Wires real handlers and the real unit of work to an isolated in-memory database and test doubles.
 /// Each call uses a fresh DbContext, like a separate HTTP request scope.
 /// </summary>
 internal sealed class SyncTestHost
@@ -43,27 +43,30 @@ internal sealed class SyncTestHost
     public async Task<SyncResultDto> RunSyncAsync()
     {
         await using var db = CreateDbContext();
-        return await CreateSyncService(db).RunAsync(CancellationToken.None);
+        return await CreateSyncHandler(db).HandleAsync(new SyncDocumentsCommand(), CancellationToken.None);
     }
 
-    public DocumentSyncService CreateSyncService(LedgerSyncDbContext db)
+    public SyncDocumentsCommandHandler CreateSyncHandler(LedgerSyncDbContext db)
     {
         var unitOfWork = new UnitOfWork(db);
-        return new DocumentSyncService(
+        return new SyncDocumentsCommandHandler(
             SyncLock,
             ExternalSource,
-            new OrderRepository(db),
-            new ExternalDocumentRepository(db),
-            new SyncLogRepository(db),
             unitOfWork,
             new ExternalDocumentPayloadValidator(Time),
-            CreateReporter(db, unitOfWork),
+            CreateReporter(unitOfWork),
             Time,
-            NullLogger<DocumentSyncService>.Instance);
+            NullLogger<SyncDocumentsCommandHandler>.Instance);
     }
 
-    public SyncLogService CreateSyncLogService(LedgerSyncDbContext db) =>
-        new(new SyncLogRepository(db), new SyncLogsQueryValidator(), CreateReporter(db, new UnitOfWork(db)));
+    public GetSyncLogsQueryHandler CreateGetSyncLogsHandler(LedgerSyncDbContext db) =>
+        new(new UnitOfWork(db), new GetSyncLogsQueryValidator());
+
+    public ResendLatestSyncLogCommandHandler CreateResendHandler(LedgerSyncDbContext db)
+    {
+        var unitOfWork = new UnitOfWork(db);
+        return new ResendLatestSyncLogCommandHandler(unitOfWork, CreateReporter(unitOfWork));
+    }
 
     public async Task<List<ExternalDocument>> GetDocumentsAsync()
     {
@@ -77,6 +80,6 @@ internal sealed class SyncTestHost
         return await db.SyncLogs.AsNoTracking().Include(s => s.Errors).SingleAsync(s => s.Id == runId);
     }
 
-    private GoogleSheetReporter CreateReporter(LedgerSyncDbContext db, UnitOfWork unitOfWork) =>
+    private GoogleSheetReporter CreateReporter(UnitOfWork unitOfWork) =>
         new(GoogleSheets, unitOfWork, Time, NullLogger<GoogleSheetReporter>.Instance);
 }

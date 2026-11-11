@@ -1,10 +1,17 @@
 namespace LedgerSync.Application.Abstractions.Persistence;
 
 /// <summary>
-/// Commits all pending changes tracked by repositories as a single atomic transaction.
+/// Single entry point to persistence: repositories share one change tracker,
+/// and <see cref="SaveChangesAsync"/> commits all their pending changes in one transaction.
 /// </summary>
 public interface IUnitOfWork
 {
+    IOrderRepository Orders { get; }
+
+    IExternalDocumentRepository Documents { get; }
+
+    ISyncLogRepository SyncLogs { get; }
+
     Task<int> SaveChangesAsync(CancellationToken cancellationToken);
 
     /// <summary>
