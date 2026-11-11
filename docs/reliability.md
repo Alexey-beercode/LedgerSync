@@ -34,7 +34,7 @@
 | 15 | Разные часовые пояса → ложные обновления или ошибка `timestamptz` | Все даты нормализуются в UTC в домене | `Guard.Utc` | `Create_NormalizesCurrencyAndTimestampToUtc`, `HasChanges_SameValuesInOtherOffset_IsFalse` |
 | 16 | Документ по несуществующему заказу | Отклоняется с причиной в `sync_log_errors`, статус `PartialSuccess`; FK `external_documents → orders` | `SyncDocumentsCommandHandler`, `ExternalDocumentConfiguration` | `Handle_UnknownOrder_RejectsDocumentAndKeepsOthers` |
 | 17 | Google недоступен → откат документов или 500 | Отправка только **после** коммита; любое исключение логгера перехватывается, результат пишется в `google_sheet_status` | `GoogleSheetReporter` | `Handle_GoogleSheetsUnavailable_...`, `GoogleSheetsDown_DocumentsStaySavedAndRunCanBeResent` |
-| 18 | Повтор отправки в Google создаёт дубль строки | Upsert по `RunId` в CSV-mock и в `Code.gs` (+ `LockService`) | `FileGoogleSheetLogger`, `google-apps-script/Code.gs` | `Send_SameRunTwice_KeepsOneUpdatedRow`, `Sync_SuccessfulRun_IsWrittenToMockSheetOnce` |
+| 18 | Повтор отправки в Google создаёт дубль строки | Upsert по `RunId`: строка запуска обновляется, а не добавляется | `FileGoogleSheetLogger` | `Send_SameRunTwice_KeepsOneUpdatedRow`, `Sync_SuccessfulRun_IsWrittenToMockSheetOnce` |
 | 19 | Потеря строки журнала Google | Статус `Failed` + текст ошибки хранятся в БД; идемпотентная повторная отправка последнего **или любого** запуска по `runId` | `SyncLog.MarkGoogleSheetFailed`, `ResendSyncLogCommandHandler` | `ResendLatest_AfterGoogleOutage_DeliversSameRunOnce`, `ResendByRunId_OlderUndeliveredRun_IsDelivered...` |
 | 20 | Счётчики запуска не сходятся | Доменный инвариант `Created + Updated + Skipped == Received`, иначе исключение | `SyncLog.Complete` | `Complete_CountersDoNotAddUp_Throws`, `Handle_AnyOutcome_CountersAddUpToReceived` |
 | 21 | Изменение уже завершённого запуска | `SyncRunAlreadyFinishedException` | `SyncLog.EnsureRunning` | `FinishedRun_CannotBeChanged` |
@@ -47,7 +47,7 @@
 | 28 | Известный документ «переехал» в другой заказ или сменил тип, и это прошло незаметно | Такая версия отклоняется с причиной в `sync_log_errors`, сохранённые данные не меняются | `ExternalDocument.HasSameIdentity`, `SyncDocumentsCommandHandler` | `Handle_KnownDocumentMovedToAnotherOrder_IsRejectedAndNotChanged` |
 | 29 | Mock внешней системы доступен в production и позволяет сломать синхронизацию | Mock-маршруты регистрируются только при `MockExternalApi:Enabled=true` | `MockExternalApiEndpoints`, `WebApplicationExtensions` | `MockExternalApi_Disabled_IsNotReachable` |
 | 30 | Демо-данные попадают в боевую базу | Демо-заказы не входят в миграции; идемпотентный `DemoDataSeeder` только при `Persistence:SeedDemoData=true` | `DemoDataSeeder` | `DemoSeeder_RunTwice_InsertsOrdersOnce` |
-| 31 | Production тихо работает на mock из-за значений по умолчанию | Адрес внешней системы и режим Google обязательны, значений по умолчанию нет | `appsettings.json`, `GoogleSheetsOptions`, `ExternalApiOptions` | `Production_WithoutExplicitConfiguration_RefusesToStart`, `ExternalApiOptionsTests` |
+| 31 | Production тихо ходит в mock внешней системы из-за значений по умолчанию | Адрес внешней системы обязателен, значения по умолчанию нет | `appsettings.json`, `ExternalApiOptions` | `Production_WithoutExplicitConfiguration_RefusesToStart`, `ExternalApiOptionsTests` |
 
 ## Как увидеть это вживую
 
@@ -83,9 +83,8 @@ curl -X POST http://localhost:8080/api/sync/documents
 
 `Failed` с причиной `HTTP 503` после повторов. Документы не тронуты, запуск записан в журнал и в Google Sheets.
 
-Отказ Google: запустить с недоступным адресом Apps Script (`GOOGLE_SHEETS_MODE=AppsScript`,
-`GOOGLE_SHEETS_APPS_SCRIPT_URL=http://localhost:9/`). Синхронизация успешна, документы сохранены,
-`googleSheetStatus: Failed`. После возврата в `File` вызов `POST /api/sync/logs/latest/send-to-google` даёт `Sent`,
+Отказ Google проверяется автотестами (`Handle_GoogleSheetsUnavailable_...`, `GoogleSheetsDown_...`): документы сохранены,
+`googleSheetStatus: Failed`, а повторная отправка `POST /api/sync/logs/{runId}/send-to-google` даёт `Sent`,
 и строка в таблице одна.
 
 ## Структурированные события

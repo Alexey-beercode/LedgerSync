@@ -94,8 +94,8 @@ API будет на http://localhost:5080, Scalar UI — http://localhost:5080/s
 включает миграции при старте, демо-заказы и mock внешней системы. Строка подключения —
 в `src/LedgerSync.Api/appsettings.Development.json`.
 
-> В окружении `Production` демо-функции выключены, а адрес внешней системы (`ExternalApi:BaseUrl`) и режим Google
-> (`GoogleSheets:Mode`) обязательны. Без них приложение не стартует и сообщает, чего не хватает (проверено тестом).
+> В окружении `Production` демо-функции выключены, а адрес внешней системы (`ExternalApi:BaseUrl`) обязателен.
+> Без него приложение не стартует и сообщает, чего не хватает (проверено тестом).
 
 Готовые запросы ко всем endpoint'ам — [src/LedgerSync.Api/LedgerSync.Api.http](src/LedgerSync.Api/LedgerSync.Api.http)
 (Visual Studio, Rider, VS Code REST Client).
@@ -251,25 +251,19 @@ public interface IGoogleSheetLogger
 На каждый запуск в таблицу пишется одна строка: `RunId, StartedAt, FinishedAt, Status, DocumentsReceived,
 DocumentsCreated, DocumentsUpdated, DocumentsSkipped, ErrorMessage`.
 
-Реализации выбираются настройкой `GoogleSheets:Mode`:
-
-| Mode | Реализация | Назначение |
-|---|---|---|
-| `File` | `FileGoogleSheetLogger` | **Вариант C (mock).** CSV-файл с теми же колонками, что и лист Google |
-| `AppsScript` | `AppsScriptGoogleSheetLogger` | **Вариант B (реальная интеграция).** HTTP POST в Apps Script Web App ([google-apps-script/Code.gs](google-apps-script/Code.gs)) |
+Выбран **вариант C из задания: mock-реализация** `FileGoogleSheetLogger`. Она пишет строки в CSV-файл
+с теми же колонками, что и лист Google. Реальную таблицу задание создавать не требует, а вся логика вокруг
+отправки (когда отправлять, что делать при отказе, как переотправить) не зависит от реализации и одинаково
+работает с mock и с настоящим Google.
 
 Свойства, важные для надёжности:
 
 - **Отправка идёт только после коммита документов** и не может их откатить. Любая ошибка логгера перехватывается,
   в `sync_logs` сохраняется `google_sheet_status = Failed` и текст ошибки.
-- **Идемпотентность.** И CSV-mock, и `Code.gs` делают upsert по `RunId`. Повторы HTTP (retry) и ручная повторная
-  отправка не создают дубли строк.
 - **Повторная отправка любого запуска**: последнего (`POST /api/sync/logs/latest/send-to-google`, как в задании)
   или конкретного (`POST /api/sync/logs/{runId}/send-to-google`). Так можно доставить и запуск, который упал
   в Google раньше последнего.
-- Режим обязателен: production не может незаметно работать на mock.
-- Для Apps Script настроены retry с backoff, таймауты и circuit breaker. Тело ответа проверяется явно
-  (Apps Script возвращает 200 даже при ошибке скрипта).
+- **Идемпотентность.** Строка ищется по `RunId` и обновляется, поэтому повторная отправка не создаёт дубль.
 - CSV пишется во временный файл и атомарно подменяется — сбой не оставит половину файла.
 
 ### Как проверить
@@ -281,27 +275,19 @@ DocumentsCreated, DocumentsUpdated, DocumentsSkipped, ErrorMessage`.
   docker compose exec api cat google-sheets-mock/sync-log.csv
   ```
 
-- Сценарий отказа: указать недоступный адрес Apps Script, например
-  `GOOGLE_SHEETS_MODE=AppsScript GOOGLE_SHEETS_APPS_SCRIPT_URL=http://localhost:9/ docker compose up -d`.
-  Синхронизация проходит, документы сохранены, после повторов в ответе `"googleSheetStatus": "Failed"`.
-  После возврата `File` повторная отправка `POST /api/sync/logs/latest/send-to-google` даёт `Sent`.
-  В автотестах отказ имитирует тестовый `UnavailableGoogleSheetLogger`, в боевом коде такого режима нет.
+- Отказ Google и повторная отправка проверены автотестами: в них логгер подменяется на всегда падающий
+  (`Handle_GoogleSheetsUnavailable_...`, `GoogleSheetsDown_DocumentsStaySavedAndRunCanBeResent`).
 
-### Как переключиться на реальную Google-таблицу
+### Как заменить mock на реальную Google-таблицу
 
-1. Создать Google-таблицу → Extensions → Apps Script → вставить [google-apps-script/Code.gs](google-apps-script/Code.gs).
-2. Deploy → New deployment → Web app, *Execute as: Me*, *Who has access: Anyone with the link*.
-3. Передать URL **не через git**, а через переменные окружения или user-secrets:
+1. Добавить реализацию `IGoogleSheetLogger` в `Infrastructure/GoogleSheets`, например `SheetsApiGoogleSheetLogger`
+   на пакете `Google.Apis.Sheets.v4` с Service Account (вариант A) или HTTP POST в Apps Script Web App (вариант B).
+   Строку стоит искать по `RunId` и обновлять, а не добавлять, чтобы повторы оставались идемпотентными.
+2. Зарегистрировать её вместо `FileGoogleSheetLogger` в `InfrastructureServiceCollectionExtensions.AddGoogleSheets`.
+3. Секреты (JSON ключа Service Account или URL Web App) передавать через переменные окружения или секрет-хранилище,
+   не через git.
 
-   ```bash
-   dotnet user-secrets set "GoogleSheets:AppsScriptUrl" "<deployment-url>" --project src/LedgerSync.Api
-   ```
-
-   В Docker — переменные `GOOGLE_SHEETS_MODE=AppsScript` и `GOOGLE_SHEETS_APPS_SCRIPT_URL` в `.env` (файл в `.gitignore`).
-4. Указать `GoogleSheets:Mode=AppsScript`. При неверной конфигурации приложение не стартует (`ValidateOnStart`).
-
-Вариант A (Sheets API + Service Account) добавляется новой реализацией `IGoogleSheetLogger` в
-`Infrastructure/GoogleSheets` и одной веткой в `InfrastructureServiceCollectionExtensions.AddGoogleSheets`. Остальной код не меняется.
+Остальной код — обработчики, повторная отправка, журнал — не меняется.
 
 ## 7. Документы по несуществующим заказам
 
@@ -335,8 +321,8 @@ DocumentsCreated, DocumentsUpdated, DocumentsSkipped, ErrorMessage`.
   (вместе с валютой) и `ExternalUpdatedAt`.
 - Нет аутентификации и авторизации (по заданию не требуются).
 - Mock внешней системы работает в том же процессе (вариант 1 из задания) и включается только флагом.
-- Реальная интеграция с Google (Apps Script) покрыта тестами на подменённом HTTP, но против настоящей таблицы
-  в рамках задания не проверялась.
+- Google Sheets представлен mock-реализацией (вариант C, разрешён заданием); реальная таблица подключается
+  отдельной реализацией `IGoogleSheetLogger` (см. п. 6).
 
 ## 9. Что улучшить перед production
 
@@ -346,12 +332,12 @@ DocumentsCreated, DocumentsUpdated, DocumentsSkipped, ErrorMessage`.
    пагинация, обработка пачками.
 3. **Наблюдаемость**: OpenTelemetry (traces + metrics: длительность, счётчики, доля `Failed`), алерты на
    `Failed` / `PartialSuccess` и на рост `google_sheet_status = Failed`.
-4. **Безопасность**: аутентификация (JWT / API key), rate limiting, секреты в Vault / Key Vault, Service Account
-   для Sheets API вместо публичного Web App URL.
-5. **Миграции через migration bundle в CI/CD**, а не при старте приложения.
-6. **CI**: сборка, тесты (включая Testcontainers), анализаторы, проверка уязвимых пакетов.
-7. Retention-политика для `sync_logs` и `sync_log_errors`, индекс по статусу для мониторинга.
-8. Отдельный сервис или контракт для внешней системы (сейчас mock в процессе).
+4. **Реальная Google-таблица** вместо mock (Sheets API + Service Account), секреты в Vault / Key Vault.
+5. **Безопасность**: аутентификация (JWT / API key), rate limiting.
+6. **Миграции через migration bundle в CI/CD**, а не при старте приложения.
+7. **CI**: сборка, тесты (включая Testcontainers), анализаторы, проверка уязвимых пакетов.
+8. Retention-политика для `sync_logs` и `sync_log_errors`, индекс по статусу для мониторинга.
+9. Отдельный сервис или контракт для внешней системы (сейчас mock в процессе).
 
 ## 10. Использование AI-инструментов
 
@@ -500,8 +486,7 @@ curl -X PUT http://localhost:8080/mock/external/scenario/Updated
 | `Persistence:SeedDemoData` | `false` (`true` в Development/Docker) | Добавить демо-заказы `ORD-001…003` |
 | `ExternalApi:BaseUrl` | — (обязателен; в Development `http://localhost:5080`) | Адрес внешней системы |
 | `ExternalApi:MaxRetryAttempts` | `3` | Число повторов; таймауты, backoff с jitter и circuit breaker — стандартные значения `AddStandardResilienceHandler` |
-| `GoogleSheets:Mode` | — (обязателен; в Development/Docker `File`) | `File` (mock CSV) или `AppsScript` |
-| `GoogleSheets:AppsScriptUrl` | — | URL Web App (секрет, не коммитить) |
+| `GoogleSheets:FilePath` | `google-sheets-mock/sync-log.csv` | CSV-файл mock-таблицы Google |
 | `MockExternalApi:Enabled` | `false` (`true` в Development/Docker) | Подключить mock внешней системы |
 
 Все секции валидируются при старте (`ValidateOnStart`): при неверной конфигурации приложение не запустится.
