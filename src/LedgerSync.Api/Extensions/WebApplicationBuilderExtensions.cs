@@ -2,6 +2,7 @@ using System.Diagnostics;
 using LedgerSync.Api.ExceptionHandling;
 using LedgerSync.Api.MockExternalApi;
 using LedgerSync.Application;
+using LedgerSync.Application.Common.Serialization;
 using LedgerSync.Infrastructure;
 using LedgerSync.Infrastructure.Persistence;
 
@@ -26,7 +27,8 @@ public static class WebApplicationBuilderExtensions
 
     private static void AddPresentation(this WebApplicationBuilder builder)
     {
-        builder.Services.AddControllers();
+        builder.Services.AddControllers()
+            .AddJsonOptions(options => options.JsonSerializerOptions.Converters.Add(new UtcDateTimeOffsetJsonConverter()));
 
         // Every error response carries a traceId to correlate it with logs.
         builder.Services.AddProblemDetails(options => options.CustomizeProblemDetails = context =>
@@ -46,7 +48,11 @@ public static class WebApplicationBuilderExtensions
 
     private static void AddMockExternalApi(this WebApplicationBuilder builder)
     {
-        var initial = builder.Configuration.GetValue("MockExternalApi:Scenario", MockExternalScenario.Baseline);
-        builder.Services.AddSingleton(new MockExternalScenarioState(initial));
+        var options = builder.Configuration.GetSection(MockExternalApiOptions.SectionName).Get<MockExternalApiOptions>()
+                      ?? new MockExternalApiOptions();
+
+        builder.Services.AddSingleton(options);
+        if (options.Enabled)
+            builder.Services.AddSingleton(new MockExternalScenarioState(options.Scenario));
     }
 }

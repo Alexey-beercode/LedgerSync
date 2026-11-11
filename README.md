@@ -37,6 +37,12 @@
 | Тесты | xUnit, EF Core InMemory, Testcontainers (PostgreSQL), WebApplicationFactory |
 | Инфраструктура | Docker, Docker Compose |
 
+**Почему .NET 10, а не рекомендованные .NET 8/9.** .NET 10 — текущий LTS-релиз (поддержка до ноября 2028),
+он обратно совместим с API .NET 8/9, и всё используемое в решении (ASP.NET Core, EF Core, Npgsql) доступно
+в нём в стабильных версиях. .NET 9 — STS-релиз с более коротким сроком поддержки. Код не использует
+специфичных для .NET 10 возможностей, поэтому при необходимости переводится на .NET 8 сменой `TargetFramework`
+и версий пакетов.
+
 ## 1. Как запустить проект
 
 ### Вариант A — Docker Compose (рекомендуется)
@@ -54,7 +60,8 @@ docker compose up -d --build
 | Health (liveness / readiness) | http://localhost:8080/health/live, http://localhost:8080/health/ready |
 | PostgreSQL | `localhost:5433`, БД `ledgersync`, `postgres` / `postgres` |
 
-Миграции применяются автоматически при старте. Порты и пароль можно поменять: скопируйте `.env.example` в `.env`.
+Миграции применяются автоматически при старте, демо-заказы `ORD-001…ORD-003` добавляются, mock внешней системы
+включён. Всё это включено явно в `docker-compose.yml`. Порты и пароль можно поменять: скопируйте `.env.example` в `.env`.
 
 Быстрая проверка:
 
@@ -84,9 +91,12 @@ docker compose up -d postgres
 dotnet run --project src/LedgerSync.Api --launch-profile http
 ```
 
-API будет на http://localhost:5080, Scalar UI — http://localhost:5080/scalar. В окружении `Development`
-миграции применяются при старте (`Persistence:ApplyMigrationsOnStartup`). Строка подключения —
+API будет на http://localhost:5080, Scalar UI — http://localhost:5080/scalar. Окружение `Development`
+включает миграции при старте, демо-заказы и mock внешней системы. Строка подключения —
 в `src/LedgerSync.Api/appsettings.Development.json`.
+
+> В окружении `Production` демо-функции выключены, а адрес внешней системы (`ExternalApi:BaseUrl`) и режим Google
+> (`GoogleSheets:Mode`) обязательны. Без них приложение не стартует и сообщает, чего не хватает (проверено тестом).
 
 Готовые запросы ко всем endpoint'ам — [src/LedgerSync.Api/LedgerSync.Api.http](src/LedgerSync.Api/LedgerSync.Api.http)
 (Visual Studio, Rider, VS Code REST Client).
@@ -99,8 +109,8 @@ dotnet test
 
 | Проект | Что проверяет | Требования |
 |---|---|---|
-| `tests/LedgerSync.UnitTests` (51 тест) | Обработчики команд и запросов на реальном unit of work поверх EF Core InMemory, валидация, доменные инварианты | ничего |
-| `tests/LedgerSync.IntegrationTests` (13 тестов) | Весь путь по HTTP: API → обработчик → **настоящий PostgreSQL** (Testcontainers); unique index, advisory lock, отказ Google | запущенный Docker |
+| `tests/LedgerSync.UnitTests` | Обработчики команд и запросов на реальном unit of work поверх EF Core InMemory, валидация, доменные инварианты, HTTP-клиент внешнего API и оба Google-логгера на подменённом транспорте | ничего |
+| `tests/LedgerSync.IntegrationTests` | Весь путь по HTTP: API → обработчик → **настоящий PostgreSQL** (Testcontainers); unique index, advisory lock, отказ Google, отсутствие demo-функций в production | запущенный Docker |
 
 Только unit-тесты (без Docker):
 
@@ -127,13 +137,17 @@ dotnet test tests/LedgerSync.UnitTests
 
 | Таблица | Назначение | Важное |
 |---|---|---|
-| `orders` | Внутренние заказы | unique `order_number`; seed: `ORD-001`, `ORD-002`, `ORD-003` |
+| `orders` | Внутренние заказы | unique `order_number` |
 | `external_documents` | Документы из внешней системы | **unique `external_id`**, FK на `orders`, `CHECK amount >= 0`, индекс по `order_number`, `numeric(18,2)` для сумм |
 | `sync_logs` | История запусков | статус запуска и статус доставки в Google, индекс по `started_at DESC` |
 | `sync_log_errors` | Отклонённые документы конкретного запуска | `external_id` + причина |
 
 Статусы и типы хранятся строками (`Invoice`, `Signed`, `PartialSuccess`…), чтобы данные читались без справочников.
 Одновременную запись исключает advisory lock (см. п. 4), поэтому оптимистичные блокировки не нужны.
+
+**Демо-данные не входят в миграции.** Заказы `ORD-001`, `ORD-002`, `ORD-003` добавляет `DemoDataSeeder`
+только при `Persistence:SeedDemoData=true` (Development, Docker, тесты). Seeder идемпотентен: добавляет только
+отсутствующие заказы. `ORD-404` специально отсутствует — на нём показан сценарий «несуществующий заказ».
 
 Миграции лежат в `src/LedgerSync.Infrastructure/Persistence/Migrations` и применяются при старте
 (если `Persistence:ApplyMigrationsOnStartup=true`) или вручную:
@@ -184,7 +198,8 @@ flowchart TD
 | Ситуация | Действие | Счётчик |
 |---|---|---|
 | Новый `externalId` | создать | `DocumentsCreated` |
-| Известный, изменились `Status`, `Amount` или `ExternalUpdatedAt` | обновить | `DocumentsUpdated` |
+| Известный, изменились `Status`, `Amount` или `ExternalUpdatedAt` | обновить (сумма обновляется вместе с валютой) | `DocumentsUpdated` |
+| Известный, но пришёл с **другим заказом или типом** | отклонить, данные не меняются | `DocumentsSkipped`, статус `PartialSuccess` |
 | Известный, данные не изменились | пропустить | `DocumentsSkipped` |
 | Пришла **более старая** версия (`ExternalUpdatedAt` меньше сохранённого) | пропустить, warning в лог | `DocumentsSkipped` |
 | Тот же `externalId` несколько раз в одном ответе | берётся самая свежая версия, остальные копии пропускаются | `DocumentsSkipped` |
@@ -241,7 +256,7 @@ DocumentsCreated, DocumentsUpdated, DocumentsSkipped, ErrorMessage`.
 
 | Mode | Реализация | Назначение |
 |---|---|---|
-| `File` (по умолчанию) | `FileGoogleSheetLogger` | **Вариант C (mock).** CSV-файл с теми же колонками, что и лист Google |
+| `File` | `FileGoogleSheetLogger` | **Вариант C (mock).** CSV-файл с теми же колонками, что и лист Google |
 | `AppsScript` | `AppsScriptGoogleSheetLogger` | **Вариант B (реальная интеграция).** HTTP POST в Apps Script Web App ([google-apps-script/Code.gs](google-apps-script/Code.gs)) |
 
 Свойства, важные для надёжности:
@@ -249,7 +264,11 @@ DocumentsCreated, DocumentsUpdated, DocumentsSkipped, ErrorMessage`.
 - **Отправка идёт только после коммита документов** и не может их откатить. Любая ошибка логгера перехватывается,
   в `sync_logs` сохраняется `google_sheet_status = Failed` и текст ошибки.
 - **Идемпотентность.** И CSV-mock, и `Code.gs` делают upsert по `RunId`. Повторы HTTP (retry) и ручная повторная
-  отправка (`POST /api/sync/logs/latest/send-to-google`) не создают дубли строк.
+  отправка не создают дубли строк.
+- **Повторная отправка любого запуска**: последнего (`POST /api/sync/logs/latest/send-to-google`, как в задании)
+  или конкретного (`POST /api/sync/logs/{runId}/send-to-google`). Так можно доставить и запуск, который упал
+  в Google раньше последнего.
+- Режим обязателен: production не может незаметно работать на mock.
 - Для Apps Script настроены retry с backoff, таймауты и circuit breaker. Тело ответа проверяется явно
   (Apps Script возвращает 200 даже при ошибке скрипта).
 - CSV пишется во временный файл и атомарно подменяется — сбой не оставит половину файла.
@@ -306,11 +325,19 @@ DocumentsCreated, DocumentsUpdated, DocumentsSkipped, ErrorMessage`.
 - **Одна транзакция на запуск.** Это даёт атомарность, но на очень больших пачках транзакция будет долгой.
 - **Запуск только вручную** через API, без планировщика.
 - **Google отправляется синхронно после коммита.** Если процесс упадёт между коммитом и отправкой, строка останется
-  в статусе `Pending`, и её нужно переотправить вручную endpoint'ом resend. Автоматического повтора (outbox) нет.
+  в статусе `Pending`, и её нужно переотправить вручную (`POST /api/sync/logs/{runId}/send-to-google`).
+  Автоматического повтора (outbox) нет.
 - **Зависший запуск** (процесс упал во время синхронизации) помечается `Failed` только при следующем запуске.
-- Смена заказа у уже существующего документа не отслеживается: по заданию обновляются только `Status`, `Amount`,
-  `ExternalUpdatedAt`.
-- Нет аутентификации и авторизации (по заданию не требуются). Mock внешней системы работает в том же процессе.
+- **Переходы статусов не проверяются.** Источник истины — внешняя система, поэтому, например, `Signed → Created`
+  с более новой датой будет принят. Защита есть только от устаревших версий (более старая `ExternalUpdatedAt`).
+- **`DocumentsSkipped` включает и отклонённые документы** (так предписывает модель `SyncLog` из задания).
+  Отклонённые видны отдельно в `errors` и по статусу `PartialSuccess`.
+- Номер документа (`DocumentNumber`) после создания не обновляется: по заданию отслеживаются `Status`, `Amount`
+  (вместе с валютой) и `ExternalUpdatedAt`.
+- Нет аутентификации и авторизации (по заданию не требуются).
+- Mock внешней системы работает в том же процессе (вариант 1 из задания) и включается только флагом.
+- Реальная интеграция с Google (Apps Script) покрыта тестами на подменённом HTTP, но против настоящей таблицы
+  в рамках задания не проверялась.
 
 ## 9. Что улучшить перед production
 
@@ -355,7 +382,7 @@ Api ──► Infrastructure ──► Application ──► Domain
 | `LedgerSync.Domain` | Сущности (`Order`, `ExternalDocument`, `SyncLog`, `SyncLogError`), Enumeration-классы, инварианты. Без внешних зависимостей |
 | `LedgerSync.Application` | Команды и запросы с обработчиками (`Features/*`), порты (интерфейсы), DTO, валидаторы, мапперы, структурированные log-события |
 | `LedgerSync.Infrastructure` | EF Core + PostgreSQL, unit of work с репозиториями, advisory lock, HTTP-клиент внешнего API, Google-логгеры |
-| `LedgerSync.Api` | Контроллеры, глобальный exception handler, health checks, OpenAPI, mock внешней системы, composition root |
+| `LedgerSync.Api` | Контроллеры, глобальный exception handler, health checks, OpenAPI, composition root; mock внешней системы в отдельной папке `MockExternalApi`, подключается только флагом |
 
 ### CQRS
 
@@ -364,7 +391,7 @@ Api ──► Infrastructure ──► Application ──► Domain
 | Тип | Операция | Endpoint |
 |---|---|---|
 | Command | `SyncDocumentsCommand` | `POST /api/sync/documents` |
-| Command | `ResendLatestSyncLogCommand` | `POST /api/sync/logs/latest/send-to-google` |
+| Command | `ResendSyncLogCommand` | `POST /api/sync/logs/latest/send-to-google`, `POST /api/sync/logs/{runId}/send-to-google` |
 | Query | `GetSyncLogsQuery` | `GET /api/sync/logs` |
 | Query | `GetOrderDocumentsQuery` | `GET /api/orders/{orderNumber}/documents` |
 
@@ -383,7 +410,8 @@ Api ──► Infrastructure ──► Application ──► Domain
 
 - нет навигационных свойств между `Order` и `ExternalDocument`: связи хватает внешнего ключа `OrderId`;
 - нет оптимистичных блокировок (`xmin`): единственного писателя уже гарантирует advisory lock;
-- нет demo-режимов в боевом коде: отказ Google имитируется только в тестах.
+- нет demo-режимов в боевом коде: отказ Google имитируется только в тестах, mock-API и демо-заказы
+  включаются только флагами конфигурации.
 
 ### Unit of Work
 
@@ -395,7 +423,7 @@ Api ──► Infrastructure ──► Application ──► Domain
 
 Настройка хоста вынесена в extensions: [WebApplicationBuilderExtensions](src/LedgerSync.Api/Extensions/WebApplicationBuilderExtensions.cs)
 (`AddLedgerSyncServices`) и [WebApplicationExtensions](src/LedgerSync.Api/Extensions/WebApplicationExtensions.cs)
-(`MigrateDatabaseIfEnabledAsync`, `UseLedgerSyncPipeline`), поэтому `Program.cs` занимает несколько строк.
+(`InitializeDatabaseAsync`, `UseLedgerSyncPipeline`), поэтому `Program.cs` занимает несколько строк.
 
 ## API
 
@@ -405,7 +433,10 @@ Api ──► Infrastructure ──► Application ──► Domain
 | `GET` | `/api/orders/{orderNumber}/documents` | `200`, `400` невалидный номер, `404` заказ не найден |
 | `GET` | `/api/sync/logs?take=20` | `200` последние запуски с ошибками по документам, `400` если `take` вне 1..100 |
 | `POST` | `/api/sync/logs/latest/send-to-google` | `200` статус доставки, `404` запусков ещё не было, `409` последний запуск ещё идёт |
+| `POST` | `/api/sync/logs/{runId}/send-to-google` | `200` статус доставки, `404` запуск не найден, `409` запуск ещё идёт |
 | `GET` | `/health/live`, `/health/ready` | liveness / readiness (проверка БД) |
+
+Даты в ответах — UTC в формате из задания: `"2026-06-20T10:00:00Z"`.
 
 Пример ответа синхронизации:
 
@@ -436,8 +467,11 @@ Api ──► Infrastructure ──► Application ──► Domain
 
 ## Mock внешней системы
 
-Mock работает в том же приложении (`/mock/external/...`), но сервис синхронизации ходит к нему **по настоящему HTTP**
-через тот же клиент с retry и таймаутами, что и к реальной системе. Сценарий переключается без перезапуска:
+Реализован вариант 1 из задания: endpoint внутри того же приложения. Код изолирован в папке
+`src/LedgerSync.Api/MockExternalApi` и подключается только при `MockExternalApi:Enabled=true` (Development, Docker,
+тесты). В production его маршрутов нет совсем, это проверено тестом. Сервис синхронизации ходит к mock
+**по настоящему HTTP** через тот же клиент с retry и таймаутами, что и к реальной системе, поэтому замена на
+реальную систему — это только смена `ExternalApi:BaseUrl`. Сценарий переключается без перезапуска:
 
 ```bash
 curl -X PUT http://localhost:8080/mock/external/scenario/Updated
@@ -460,10 +494,12 @@ curl -X PUT http://localhost:8080/mock/external/scenario/Updated
 |---|---|---|
 | `ConnectionStrings:LedgerSync` | — | Строка подключения PostgreSQL (обязательна) |
 | `Persistence:ApplyMigrationsOnStartup` | `false` (`true` в Development/Docker) | Применять миграции при старте, с повторами пока БД поднимается |
-| `ExternalApi:BaseUrl` | `http://localhost:5080` | Адрес внешней системы |
+| `Persistence:SeedDemoData` | `false` (`true` в Development/Docker) | Добавить демо-заказы `ORD-001…003` |
+| `ExternalApi:BaseUrl` | — (обязателен; в Development `http://localhost:5080`) | Адрес внешней системы |
 | `ExternalApi:AttemptTimeoutSeconds` / `MaxRetryAttempts` | `10` / `3` | Таймаут попытки и число повторов |
-| `GoogleSheets:Mode` | `File` | `File` (mock CSV) или `AppsScript` |
+| `GoogleSheets:Mode` | — (обязателен; в Development/Docker `File`) | `File` (mock CSV) или `AppsScript` |
 | `GoogleSheets:AppsScriptUrl` | — | URL Web App (секрет, не коммитить) |
+| `MockExternalApi:Enabled` | `false` (`true` в Development/Docker) | Подключить mock внешней системы |
 | `MockExternalApi:Scenario` | `Baseline` | Начальный сценарий mock |
 | `OpenApi:Enabled` | `false` (всегда включено в Development) | Публиковать OpenAPI и Scalar UI |
 

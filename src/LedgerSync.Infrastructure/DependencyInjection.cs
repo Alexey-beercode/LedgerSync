@@ -88,10 +88,11 @@ public static class DependencyInjection
             .ValidateDataAnnotations()
             .ValidateOnStart();
 
+        // A missing mode is reported by ValidateOnStart; the registration below just has to pick something.
         var mode = configuration.GetSection(GoogleSheetsOptions.SectionName)
-            .GetValue(nameof(GoogleSheetsOptions.Mode), GoogleSheetsMode.File);
+            .GetValue<GoogleSheetsMode?>(nameof(GoogleSheetsOptions.Mode));
 
-        if (mode == GoogleSheetsMode.File)
+        if (mode != GoogleSheetsMode.AppsScript)
         {
             services.AddSingleton<IGoogleSheetLogger, FileGoogleSheetLogger>();
             return;

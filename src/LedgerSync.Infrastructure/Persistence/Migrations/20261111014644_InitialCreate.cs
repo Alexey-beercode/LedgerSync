@@ -3,8 +3,6 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 #nullable disable
 
-#pragma warning disable CA1814 // Prefer jagged arrays over multidimensional
-
 namespace LedgerSync.Infrastructure.Persistence.Migrations
 {
     /// <inheritdoc />
@@ -96,16 +94,6 @@ namespace LedgerSync.Infrastructure.Persistence.Migrations
                         principalTable: "sync_logs",
                         principalColumn: "id",
                         onDelete: ReferentialAction.Cascade);
-                });
-
-            migrationBuilder.InsertData(
-                table: "orders",
-                columns: new[] { "id", "client_name", "created_at", "order_number" },
-                values: new object[,]
-                {
-                    { new Guid("6f1f6c1e-0b8a-4a53-9a39-1d5f5d0a0001"), "Alpha Logistics LLP", new DateTimeOffset(new DateTime(2026, 6, 1, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)), "ORD-001" },
-                    { new Guid("6f1f6c1e-0b8a-4a53-9a39-1d5f5d0a0002"), "Beta Construction LLP", new DateTimeOffset(new DateTime(2026, 6, 1, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)), "ORD-002" },
-                    { new Guid("6f1f6c1e-0b8a-4a53-9a39-1d5f5d0a0003"), "Gamma Retail JSC", new DateTimeOffset(new DateTime(2026, 6, 1, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)), "ORD-003" }
                 });
 
             migrationBuilder.CreateIndex(

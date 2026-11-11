@@ -15,6 +15,7 @@ internal static class Payloads
         string documentType = "Invoice",
         string status = "Created",
         decimal amount = 150_000m,
+        string currency = "KZT",
         DateTimeOffset? updatedAt = null) =>
-        new(externalId, orderNumber, documentType, $"DOC-{externalId}", amount, "KZT", status, updatedAt ?? BaseTime);
+        new(externalId, orderNumber, documentType, $"DOC-{externalId}", amount, currency, status, updatedAt ?? BaseTime);
 }

@@ -37,10 +37,31 @@ public sealed class ExternalDocumentTests
     {
         var document = Create();
 
-        Assert.False(document.HasChanges(DocumentStatus.Created, 100m, Now.ToOffset(TimeSpan.FromHours(5))));
-        Assert.True(document.HasChanges(DocumentStatus.Signed, 100m, Now));
-        Assert.True(document.HasChanges(DocumentStatus.Created, 101m, Now));
-        Assert.True(document.HasChanges(DocumentStatus.Created, 100m, Now.AddSeconds(1)));
+        Assert.False(document.HasChanges(DocumentStatus.Created, 100m, "kzt", Now.ToOffset(TimeSpan.FromHours(5))));
+        Assert.True(document.HasChanges(DocumentStatus.Signed, 100m, "KZT", Now));
+        Assert.True(document.HasChanges(DocumentStatus.Created, 101m, "KZT", Now));
+        Assert.True(document.HasChanges(DocumentStatus.Created, 100m, "USD", Now));
+        Assert.True(document.HasChanges(DocumentStatus.Created, 100m, "KZT", Now.AddSeconds(1)));
+    }
+
+    [Fact]
+    public void ApplyExternalChanges_UpdatesAmountAndCurrencyTogether()
+    {
+        var document = Create();
+
+        document.ApplyExternalChanges(DocumentStatus.Sent, 250m, "usd", Now.AddDays(1), Now.AddDays(1));
+
+        Assert.Equal((250m, "USD"), (document.Amount, document.Currency));
+    }
+
+    [Fact]
+    public void HasSameIdentity_DetectsOrderOrTypeChange()
+    {
+        var document = Create();
+
+        Assert.True(document.HasSameIdentity("ORD-001", DocumentType.Invoice));
+        Assert.False(document.HasSameIdentity("ORD-002", DocumentType.Invoice));
+        Assert.False(document.HasSameIdentity("ORD-001", DocumentType.ActOfWork));
     }
 
     [Fact]

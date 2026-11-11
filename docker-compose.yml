@@ -27,7 +27,9 @@ services:
       ASPNETCORE_ENVIRONMENT: Production
       ConnectionStrings__LedgerSync: "Host=postgres;Port=5432;Database=ledgersync;Username=${POSTGRES_USER:-postgres};Password=${POSTGRES_PASSWORD:-postgres}"
       Persistence__ApplyMigrationsOnStartup: "true"
-      # The mock external API is served by the same container.
+      # Demo setup: seeded orders and the mock external API served by the same container.
+      Persistence__SeedDemoData: "true"
+      MockExternalApi__Enabled: "true"
       ExternalApi__BaseUrl: "http://localhost:8080"
       GoogleSheets__Mode: ${GOOGLE_SHEETS_MODE:-File}
       GoogleSheets__AppsScriptUrl: ${GOOGLE_SHEETS_APPS_SCRIPT_URL:-}

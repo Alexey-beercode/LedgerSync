@@ -151,14 +151,21 @@ public sealed class SyncDocumentsCommandHandler(
                     incoming.Amount, incoming.Currency, incoming.Status, incoming.ExternalUpdatedAt, now));
                 syncLog.RecordCreated();
             }
+            else if (!existing.HasSameIdentity(incoming.OrderNumber, incoming.DocumentType))
+            {
+                var reason = $"Document cannot change its order or type (stored: {existing.OrderNumber} / {existing.DocumentType}, " +
+                             $"received: {incoming.OrderNumber} / {incoming.DocumentType}).";
+                syncLog.RecordRejected(incoming.ExternalId, reason);
+                logger.DocumentRejected(incoming.ExternalId, reason);
+            }
             else if (existing.IsNewerThan(incoming.ExternalUpdatedAt))
             {
                 logger.StaleDocumentIgnored(incoming.ExternalId, incoming.ExternalUpdatedAt, existing.ExternalUpdatedAt);
                 syncLog.RecordSkipped();
             }
-            else if (existing.HasChanges(incoming.Status, incoming.Amount, incoming.ExternalUpdatedAt))
+            else if (existing.HasChanges(incoming.Status, incoming.Amount, incoming.Currency, incoming.ExternalUpdatedAt))
             {
-                existing.ApplyExternalChanges(incoming.Status, incoming.Amount, incoming.ExternalUpdatedAt, now);
+                existing.ApplyExternalChanges(incoming.Status, incoming.Amount, incoming.Currency, incoming.ExternalUpdatedAt, now);
                 syncLog.RecordUpdated();
             }
             else

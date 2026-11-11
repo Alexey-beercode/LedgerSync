@@ -12,7 +12,7 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace LedgerSync.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(LedgerSyncDbContext))]
-    [Migration("20261111013424_InitialCreate")]
+    [Migration("20261111014644_InitialCreate")]
     partial class InitialCreate
     {
         /// <inheritdoc />
@@ -138,29 +138,6 @@ namespace LedgerSync.Infrastructure.Persistence.Migrations
                         .HasDatabaseName("ix_orders_order_number");
 
                     b.ToTable("orders", (string)null);
-
-                    b.HasData(
-                        new
-                        {
-                            Id = new Guid("6f1f6c1e-0b8a-4a53-9a39-1d5f5d0a0001"),
-                            ClientName = "Alpha Logistics LLP",
-                            CreatedAt = new DateTimeOffset(new DateTime(2026, 6, 1, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
-                            OrderNumber = "ORD-001"
-                        },
-                        new
-                        {
-                            Id = new Guid("6f1f6c1e-0b8a-4a53-9a39-1d5f5d0a0002"),
-                            ClientName = "Beta Construction LLP",
-                            CreatedAt = new DateTimeOffset(new DateTime(2026, 6, 1, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
-                            OrderNumber = "ORD-002"
-                        },
-                        new
-                        {
-                            Id = new Guid("6f1f6c1e-0b8a-4a53-9a39-1d5f5d0a0003"),
-                            ClientName = "Gamma Retail JSC",
-                            CreatedAt = new DateTimeOffset(new DateTime(2026, 6, 1, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
-                            OrderNumber = "ORD-003"
-                        });
                 });
 
             modelBuilder.Entity("LedgerSync.Domain.Entities.SyncLog", b =>

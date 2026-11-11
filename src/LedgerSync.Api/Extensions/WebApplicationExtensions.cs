@@ -1,3 +1,4 @@
+using LedgerSync.Api.MockExternalApi;
 using LedgerSync.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Options;
@@ -11,13 +12,19 @@ namespace LedgerSync.Api.Extensions;
 public static class WebApplicationExtensions
 {
     /// <summary>
-    /// Applies EF Core migrations when <c>Persistence:ApplyMigrationsOnStartup</c> is enabled.
+    /// Applies migrations (<c>Persistence:ApplyMigrationsOnStartup</c>)
+    /// and demo data (<c>Persistence:SeedDemoData</c>) when enabled.
     /// </summary>
-    public static async Task MigrateDatabaseIfEnabledAsync(this WebApplication app)
+    public static async Task InitializeDatabaseAsync(this WebApplication app)
     {
         var options = app.Services.GetRequiredService<IOptions<PersistenceOptions>>().Value;
+        var stopping = app.Lifetime.ApplicationStopping;
+
         if (options.ApplyMigrationsOnStartup)
-            await app.Services.MigrateDatabaseAsync(app.Lifetime.ApplicationStopping);
+            await app.Services.MigrateDatabaseAsync(stopping);
+
+        if (options.SeedDemoData)
+            await app.Services.SeedDemoDataAsync(stopping);
     }
 
     public static WebApplication UseLedgerSyncPipeline(this WebApplication app)
@@ -30,6 +37,9 @@ public static class WebApplicationExtensions
             app.MapOpenApi();
             app.MapScalarApiReference(options => options.WithTitle("LedgerSync API"));
         }
+
+        if (app.Services.GetRequiredService<MockExternalApiOptions>().Enabled)
+            app.MapMockExternalApi();
 
         app.MapHealthEndpoints();
         app.MapControllers();

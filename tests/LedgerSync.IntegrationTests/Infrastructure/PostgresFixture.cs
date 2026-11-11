@@ -13,15 +13,17 @@ public sealed class PostgresFixture : IAsyncLifetime
         .WithDatabase("ledgersync")
         .Build();
 
+    public string ConnectionString => _container.GetConnectionString();
+
     private LedgerSyncApiFactory? _api;
     private LedgerSyncApiFactory? _apiWithGoogleDown;
 
     /// <summary>API host with a working mock Google Sheet.</summary>
-    public LedgerSyncApiFactory Api => _api ??= new LedgerSyncApiFactory(_container.GetConnectionString(), googleSheetsDown: false);
+    public LedgerSyncApiFactory Api => _api ??= new LedgerSyncApiFactory(ConnectionString);
 
     /// <summary>API host where Google Sheets always fails.</summary>
     public LedgerSyncApiFactory ApiWithGoogleDown =>
-        _apiWithGoogleDown ??= new LedgerSyncApiFactory(_container.GetConnectionString(), googleSheetsDown: true);
+        _apiWithGoogleDown ??= new LedgerSyncApiFactory(ConnectionString, googleSheetsDown: true);
 
     /// <summary>Removes synced data; seeded orders stay.</summary>
     public async Task ResetDatabaseAsync()

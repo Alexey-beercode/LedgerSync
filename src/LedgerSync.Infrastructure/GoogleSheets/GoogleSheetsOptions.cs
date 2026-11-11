@@ -9,7 +9,9 @@ public sealed class GoogleSheetsOptions : IValidatableObject
 {
     public const string SectionName = "GoogleSheets";
 
-    public GoogleSheetsMode Mode { get; init; } = GoogleSheetsMode.File;
+    /// <summary>Required on purpose: production must choose the integration explicitly, never fall back to the mock.</summary>
+    [Required]
+    public GoogleSheetsMode? Mode { get; init; }
 
     /// <summary>CSV file used by the mock logger (<see cref="GoogleSheetsMode.File"/>).</summary>
     public string FilePath { get; init; } = "google-sheets-mock/sync-log.csv";

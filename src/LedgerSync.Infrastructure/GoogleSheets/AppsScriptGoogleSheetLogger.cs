@@ -2,6 +2,7 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using LedgerSync.Application.Abstractions.GoogleSheets;
 using LedgerSync.Application.Common.Exceptions;
+using LedgerSync.Application.Common.Serialization;
 using LedgerSync.Application.Contracts.SyncLogs;
 using Microsoft.Extensions.Options;
 using Polly.CircuitBreaker;
@@ -17,11 +18,17 @@ internal sealed class AppsScriptGoogleSheetLogger(
     HttpClient httpClient,
     IOptions<GoogleSheetsOptions> options) : IGoogleSheetLogger
 {
+    // Same payload shape as in the assignment: camelCase, timestamps with "Z".
+    private static readonly JsonSerializerOptions PayloadOptions = new(JsonSerializerDefaults.Web)
+    {
+        Converters = { new UtcDateTimeOffsetJsonConverter() }
+    };
+
     public async Task SendSyncLogAsync(SyncLogDto syncLog, CancellationToken cancellationToken)
     {
         try
         {
-            using var response = await httpClient.PostAsJsonAsync(options.Value.AppsScriptUrl, syncLog, cancellationToken);
+            using var response = await httpClient.PostAsJsonAsync(options.Value.AppsScriptUrl, syncLog, PayloadOptions, cancellationToken);
 
             if (!response.IsSuccessStatusCode)
                 throw new GoogleSheetDeliveryException($"Apps Script returned HTTP {(int)response.StatusCode}.");
