@@ -106,6 +106,19 @@ public sealed class SyncDocumentsCommandHandlerTests
         new ExternalSourceInvalidResponseException("External source returned malformed JSON.")
     };
 
+    [Fact]
+    public async Task Handle_UnexpectedClientError_FinishesRunAsFailedInsteadOfLeavingItRunning()
+    {
+        _host.ExternalSource.Throws(new NotSupportedException("The 'file' scheme is not supported."));
+
+        var result = await _host.RunSyncAsync();
+
+        var log = await _host.GetSyncLogAsync(result.RunId);
+        Assert.Equal(SyncStatus.Failed, log.Status);
+        Assert.Contains("failed unexpectedly", log.ErrorMessage);
+        Assert.Equal("Failed", Assert.Single(_host.GoogleSheets.SentRows).Status);
+    }
+
     // 6. A successful run is sent to IGoogleSheetLogger.
     [Fact]
     public async Task Handle_Success_SendsRunToGoogleSheets()
