@@ -57,7 +57,6 @@ docker compose up -d --build
 |---|---|
 | API | http://localhost:8080 |
 | Scalar UI (документация API) | http://localhost:8080/scalar |
-| Health (liveness / readiness) | http://localhost:8080/health/live, http://localhost:8080/health/ready |
 | PostgreSQL | `localhost:5433`, БД `ledgersync`, `postgres` / `postgres` |
 
 Миграции применяются автоматически при старте, демо-заказы `ORD-001…ORD-003` добавляются, mock внешней системы
@@ -302,7 +301,7 @@ DocumentsCreated, DocumentsUpdated, DocumentsSkipped, ErrorMessage`.
 4. Указать `GoogleSheets:Mode=AppsScript`. При неверной конфигурации приложение не стартует (`ValidateOnStart`).
 
 Вариант A (Sheets API + Service Account) добавляется новой реализацией `IGoogleSheetLogger` в
-`Infrastructure/GoogleSheets` и одной веткой в `DependencyInjection.AddGoogleSheets`. Остальной код не меняется.
+`Infrastructure/GoogleSheets` и одной веткой в `InfrastructureServiceCollectionExtensions.AddGoogleSheets`. Остальной код не меняется.
 
 ## 7. Документы по несуществующим заказам
 
@@ -382,7 +381,7 @@ Api ──► Infrastructure ──► Application ──► Domain
 | `LedgerSync.Domain` | Сущности (`Order`, `ExternalDocument`, `SyncLog`, `SyncLogError`), Enumeration-классы, инварианты. Без внешних зависимостей |
 | `LedgerSync.Application` | Команды и запросы с обработчиками (`Features/*`), порты (интерфейсы), DTO, валидаторы, мапперы, структурированные log-события |
 | `LedgerSync.Infrastructure` | EF Core + PostgreSQL, unit of work с репозиториями, advisory lock, HTTP-клиент внешнего API, Google-логгеры |
-| `LedgerSync.Api` | Контроллеры, глобальный exception handler, health checks, OpenAPI, composition root; mock внешней системы в отдельной папке `MockExternalApi`, подключается только флагом |
+| `LedgerSync.Api` | Контроллеры, глобальный exception handler, OpenAPI, composition root; mock внешней системы в отдельной папке `MockExternalApi`, подключается только флагом |
 
 ### CQRS
 
@@ -411,7 +410,10 @@ Api ──► Infrastructure ──► Application ──► Domain
 - нет навигационных свойств между `Order` и `ExternalDocument`: связи хватает внешнего ключа `OrderId`;
 - нет оптимистичных блокировок (`xmin`): единственного писателя уже гарантирует advisory lock;
 - нет demo-режимов в боевом коде: отказ Google имитируется только в тестах, mock-API и демо-заказы
-  включаются только флагами конфигурации.
+  включаются только флагами конфигурации;
+- нет health-check endpoint'ов: их некому опрашивать (нет оркестратора и балансировщика), а готовность базы при
+  старте обеспечивают healthcheck PostgreSQL в compose и повторы миграций. Добавляются одной строкой при деплое
+  в Kubernetes.
 
 ### Unit of Work
 
@@ -434,7 +436,6 @@ Api ──► Infrastructure ──► Application ──► Domain
 | `GET` | `/api/sync/logs?take=20` | `200` последние запуски с ошибками по документам, `400` если `take` вне 1..100 |
 | `POST` | `/api/sync/logs/latest/send-to-google` | `200` статус доставки, `404` запусков ещё не было, `409` последний запуск ещё идёт |
 | `POST` | `/api/sync/logs/{runId}/send-to-google` | `200` статус доставки, `404` запуск не найден, `409` запуск ещё идёт |
-| `GET` | `/health/live`, `/health/ready` | liveness / readiness (проверка БД) |
 
 Даты в ответах — UTC в формате из задания: `"2026-06-20T10:00:00Z"`.
 

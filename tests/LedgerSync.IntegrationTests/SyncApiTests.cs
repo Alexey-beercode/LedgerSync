@@ -127,12 +127,6 @@ public sealed class SyncApiTests(PostgresFixture postgres) : IAsyncLifetime
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
-    [Fact]
-    public async Task Health_Ready_ChecksDatabase()
-    {
-        Assert.Equal("Healthy", await _client.GetStringAsync("/health/ready"));
-    }
-
     private async Task<SyncResultDto> SyncAsync()
     {
         var response = await _client.PostAsync("/api/sync/documents", null);

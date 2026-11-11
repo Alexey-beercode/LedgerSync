@@ -4,7 +4,6 @@ using LedgerSync.Api.MockExternalApi;
 using LedgerSync.Application;
 using LedgerSync.Application.Common.Serialization;
 using LedgerSync.Infrastructure;
-using LedgerSync.Infrastructure.Persistence;
 
 namespace LedgerSync.Api.Extensions;
 
@@ -19,7 +18,6 @@ public static class WebApplicationBuilderExtensions
         builder.Services.AddInfrastructure(builder.Configuration);
 
         builder.AddPresentation();
-        builder.AddHealthChecks();
         builder.AddMockExternalApi();
 
         return builder;
@@ -41,10 +39,6 @@ public static class WebApplicationBuilderExtensions
 
         builder.Services.AddOpenApi();
     }
-
-    private static void AddHealthChecks(this WebApplicationBuilder builder) =>
-        builder.Services.AddHealthChecks()
-            .AddDbContextCheck<LedgerSyncDbContext>("database", tags: [HealthTags.Ready]);
 
     private static void AddMockExternalApi(this WebApplicationBuilder builder)
     {
