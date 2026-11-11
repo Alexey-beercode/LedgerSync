@@ -73,10 +73,21 @@ public sealed class ExternalDocument : Entity
     }
 
     /// <summary>
-    /// True when tracked fields (status, amount, external timestamp) differ from the incoming values.
+    /// True when the incoming version keeps the document's identity: same order and same type.
+    /// A document moving to another order or changing its type is suspicious and must not be applied silently.
     /// </summary>
-    public bool HasChanges(DocumentStatus status, decimal amount, DateTimeOffset externalUpdatedAt) =>
-        Status != status || Amount != amount || ExternalUpdatedAt != Guard.Utc(externalUpdatedAt);
+    public bool HasSameIdentity(string orderNumber, DocumentType documentType) =>
+        OrderNumber == orderNumber && DocumentType == documentType;
+
+    /// <summary>
+    /// True when tracked fields differ from the incoming values.
+    /// Amount and currency are compared together: an amount without its currency is meaningless.
+    /// </summary>
+    public bool HasChanges(DocumentStatus status, decimal amount, string currency, DateTimeOffset externalUpdatedAt) =>
+        Status != status
+        || Amount != amount
+        || !string.Equals(Currency, currency.Trim(), StringComparison.OrdinalIgnoreCase)
+        || ExternalUpdatedAt != Guard.Utc(externalUpdatedAt);
 
     /// <summary>
     /// True when the stored version is newer than the incoming one (out-of-order delivery).
@@ -90,11 +101,13 @@ public sealed class ExternalDocument : Entity
     public void ApplyExternalChanges(
         DocumentStatus status,
         decimal amount,
+        string currency,
         DateTimeOffset externalUpdatedAt,
         DateTimeOffset utcNow)
     {
         Status = Guard.NotNull(status, EntityName, nameof(Status));
         Amount = Guard.NotNegative(amount, EntityName, nameof(Amount));
+        Currency = Guard.NotEmpty(currency, EntityName, nameof(Currency), FieldLimits.CurrencyCode).ToUpperInvariant();
         ExternalUpdatedAt = Guard.Utc(externalUpdatedAt);
         UpdatedAt = Guard.Utc(utcNow);
     }

@@ -13,6 +13,9 @@ public sealed class PersistenceOptions
     /// <summary>Apply EF Core migrations on startup (convenient for local/Docker runs).</summary>
     public bool ApplyMigrationsOnStartup { get; init; }
 
+    /// <summary>Insert demo orders on startup. Local/Docker only, never in production.</summary>
+    public bool SeedDemoData { get; init; }
+
     [Range(1, 600)]
     public int CommandTimeoutSeconds { get; init; } = 30;
 }

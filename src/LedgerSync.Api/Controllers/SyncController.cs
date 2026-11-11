@@ -3,7 +3,7 @@ using LedgerSync.Application.Contracts.Sync;
 using LedgerSync.Application.Contracts.SyncLogs;
 using LedgerSync.Application.Features.Sync.SyncDocuments;
 using LedgerSync.Application.Features.SyncLogs.GetSyncLogs;
-using LedgerSync.Application.Features.SyncLogs.ResendLatestSyncLog;
+using LedgerSync.Application.Features.SyncLogs.ResendSyncLog;
 using Microsoft.AspNetCore.Mvc;
 
 namespace LedgerSync.Api.Controllers;
@@ -46,7 +46,19 @@ public sealed class SyncController : ControllerBase
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict)]
     public async Task<ActionResult<GoogleSheetResendResultDto>> ResendLatestToGoogle(
-        [FromServices] ICommandHandler<ResendLatestSyncLogCommand, GoogleSheetResendResultDto> handler,
+        [FromServices] ICommandHandler<ResendSyncLogCommand, GoogleSheetResendResultDto> handler,
         CancellationToken cancellationToken) =>
-        Ok(await handler.HandleAsync(new ResendLatestSyncLogCommand(), cancellationToken));
+        Ok(await handler.HandleAsync(new ResendSyncLogCommand(), cancellationToken));
+
+    /// <summary>Re-sends a specific sync run to Google Sheets, e.g. one that failed before the latest run.</summary>
+    /// <remarks>Idempotent: the sheet row is upserted by RunId, so repeated calls never duplicate it.</remarks>
+    [HttpPost("logs/{runId:guid}/send-to-google")]
+    [ProducesResponseType<GoogleSheetResendResultDto>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict)]
+    public async Task<ActionResult<GoogleSheetResendResultDto>> ResendToGoogle(
+        Guid runId,
+        [FromServices] ICommandHandler<ResendSyncLogCommand, GoogleSheetResendResultDto> handler,
+        CancellationToken cancellationToken) =>
+        Ok(await handler.HandleAsync(new ResendSyncLogCommand(runId), cancellationToken));
 }

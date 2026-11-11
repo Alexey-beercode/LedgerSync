@@ -7,7 +7,7 @@ using LedgerSync.Application.Features.Orders.GetOrderDocuments;
 using LedgerSync.Application.Features.Sync;
 using LedgerSync.Application.Features.Sync.SyncDocuments;
 using LedgerSync.Application.Features.SyncLogs.GetSyncLogs;
-using LedgerSync.Application.Features.SyncLogs.ResendLatestSyncLog;
+using LedgerSync.Application.Features.SyncLogs.ResendSyncLog;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace LedgerSync.Application;
@@ -27,7 +27,7 @@ public static class DependencyInjection
 
         // Commands
         services.AddScoped<ICommandHandler<SyncDocumentsCommand, SyncResultDto>, SyncDocumentsCommandHandler>();
-        services.AddScoped<ICommandHandler<ResendLatestSyncLogCommand, GoogleSheetResendResultDto>, ResendLatestSyncLogCommandHandler>();
+        services.AddScoped<ICommandHandler<ResendSyncLogCommand, GoogleSheetResendResultDto>, ResendSyncLogCommandHandler>();
 
         // Queries
         services.AddScoped<IQueryHandler<GetSyncLogsQuery, IReadOnlyList<SyncLogHistoryItemDto>>, GetSyncLogsQueryHandler>();

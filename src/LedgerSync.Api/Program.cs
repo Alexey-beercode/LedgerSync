@@ -6,7 +6,7 @@ builder.AddLedgerSyncServices();
 
 var app = builder.Build();
 
-await app.MigrateDatabaseIfEnabledAsync();
+await app.InitializeDatabaseAsync();
 app.UseLedgerSyncPipeline();
 
 await app.RunAsync();
