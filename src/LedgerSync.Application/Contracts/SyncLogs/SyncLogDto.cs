@@ -1,5 +1,3 @@
-using LedgerSync.Domain.Enums;
-
 namespace LedgerSync.Application.Contracts.SyncLogs;
 
 /// <summary>
@@ -9,7 +7,7 @@ public sealed record SyncLogDto(
     Guid RunId,
     DateTimeOffset StartedAt,
     DateTimeOffset? FinishedAt,
-    SyncStatus Status,
+    string Status,
     int DocumentsReceived,
     int DocumentsCreated,
     int DocumentsUpdated,

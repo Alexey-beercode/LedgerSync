@@ -1,5 +1,3 @@
-using LedgerSync.Domain.Enums;
-
 namespace LedgerSync.Application.Contracts.Sync;
 
 /// <summary>
@@ -7,10 +5,10 @@ namespace LedgerSync.Application.Contracts.Sync;
 /// </summary>
 public sealed record SyncResultDto(
     Guid RunId,
-    SyncStatus Status,
+    string Status,
     int DocumentsReceived,
     int DocumentsCreated,
     int DocumentsUpdated,
     int DocumentsSkipped,
     string? ErrorMessage,
-    GoogleSheetStatus GoogleSheetStatus);
+    string GoogleSheetStatus);

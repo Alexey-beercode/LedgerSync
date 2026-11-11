@@ -20,7 +20,7 @@ public sealed class SyncLogError : Entity
     internal static SyncLogError Create(Guid syncLogId, string? externalId, string reason) => new()
     {
         SyncLogId = syncLogId,
-        ExternalId = externalId,
-        Reason = reason
+        ExternalId = externalId is { Length: > FieldLimits.ExternalId } ? externalId[..FieldLimits.ExternalId] : externalId,
+        Reason = reason.Length > FieldLimits.ErrorReason ? reason[..FieldLimits.ErrorReason] : reason
     };
 }

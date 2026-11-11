@@ -1,5 +1,3 @@
-using LedgerSync.Domain.Enums;
-
 namespace LedgerSync.Application.Contracts.Orders;
 
 /// <summary>
@@ -14,9 +12,9 @@ public sealed record OrderDocumentsDto(
 /// </summary>
 public sealed record DocumentDto(
     string ExternalId,
-    DocumentType DocumentType,
+    string DocumentType,
     string DocumentNumber,
     decimal Amount,
     string Currency,
-    DocumentStatus Status,
+    string Status,
     DateTimeOffset ExternalUpdatedAt);

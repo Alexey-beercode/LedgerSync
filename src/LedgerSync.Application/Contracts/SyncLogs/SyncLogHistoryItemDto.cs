@@ -1,5 +1,3 @@
-using LedgerSync.Domain.Enums;
-
 namespace LedgerSync.Application.Contracts.SyncLogs;
 
 /// <summary>
@@ -9,13 +7,13 @@ public sealed record SyncLogHistoryItemDto(
     Guid RunId,
     DateTimeOffset StartedAt,
     DateTimeOffset? FinishedAt,
-    SyncStatus Status,
+    string Status,
     int DocumentsReceived,
     int DocumentsCreated,
     int DocumentsUpdated,
     int DocumentsSkipped,
     string? ErrorMessage,
-    GoogleSheetStatus GoogleSheetStatus,
+    string GoogleSheetStatus,
     string? GoogleSheetError,
     IReadOnlyList<SyncLogErrorDto> Errors);
 

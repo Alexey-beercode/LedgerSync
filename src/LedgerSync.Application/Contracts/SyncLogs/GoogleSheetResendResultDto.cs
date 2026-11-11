@@ -1,5 +1,3 @@
-using LedgerSync.Domain.Enums;
-
 namespace LedgerSync.Application.Contracts.SyncLogs;
 
 /// <summary>
@@ -7,5 +5,5 @@ namespace LedgerSync.Application.Contracts.SyncLogs;
 /// </summary>
 public sealed record GoogleSheetResendResultDto(
     Guid RunId,
-    GoogleSheetStatus GoogleSheetStatus,
+    string GoogleSheetStatus,
     string? GoogleSheetError);

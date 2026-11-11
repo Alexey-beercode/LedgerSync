@@ -1,3 +1,4 @@
+using LedgerSync.Application.Common.Exceptions;
 using LedgerSync.Application.Contracts.SyncLogs;
 
 namespace LedgerSync.Application.Services;
@@ -9,8 +10,7 @@ public interface ISyncLogService
 {
     Task<IReadOnlyList<SyncLogHistoryItemDto>> GetRecentAsync(int take, CancellationToken cancellationToken);
 
-    /// <summary>
-    /// Re-sends the latest sync run to Google Sheets. Returns null if there are no runs yet.
-    /// </summary>
-    Task<GoogleSheetResendResultDto?> ResendLatestToGoogleAsync(CancellationToken cancellationToken);
+    /// <summary>Re-sends the latest sync run to Google Sheets.</summary>
+    /// <exception cref="SyncRunNotFoundException">There are no runs yet.</exception>
+    Task<GoogleSheetResendResultDto> ResendLatestToGoogleAsync(CancellationToken cancellationToken);
 }

@@ -1,5 +1,5 @@
 using LedgerSync.Domain.Common;
-using LedgerSync.Domain.Enums;
+using LedgerSync.Domain.Enumerations;
 using LedgerSync.Domain.Exceptions;
 
 namespace LedgerSync.Domain.Entities;
@@ -15,7 +15,7 @@ public sealed class SyncLog : Entity
 
     public DateTimeOffset? FinishedAt { get; private set; }
 
-    public SyncStatus Status { get; private set; }
+    public SyncStatus Status { get; private set; } = null!;
 
     public int DocumentsReceived { get; private set; }
 
@@ -28,7 +28,7 @@ public sealed class SyncLog : Entity
     /// <summary>Fatal error that aborted the run, if any.</summary>
     public string? ErrorMessage { get; private set; }
 
-    public GoogleSheetStatus GoogleSheetStatus { get; private set; }
+    public GoogleSheetStatus GoogleSheetStatus { get; private set; } = null!;
 
     /// <summary>Last Google Sheets delivery error, if any.</summary>
     public string? GoogleSheetError { get; private set; }
@@ -45,7 +45,7 @@ public sealed class SyncLog : Entity
 
     public static SyncLog Start(DateTimeOffset utcNow) => new()
     {
-        StartedAt = utcNow,
+        StartedAt = Guard.Utc(utcNow),
         Status = SyncStatus.Running,
         GoogleSheetStatus = GoogleSheetStatus.Pending
     };
@@ -53,7 +53,9 @@ public sealed class SyncLog : Entity
     public void SetReceived(int count)
     {
         EnsureRunning();
-        DocumentsReceived = count;
+        DocumentsReceived = count >= 0
+            ? count
+            : throw new InvalidEntityDataException(nameof(SyncLog), nameof(DocumentsReceived), "value cannot be negative.");
     }
 
     public void RecordCreated()
@@ -85,42 +87,56 @@ public sealed class SyncLog : Entity
     }
 
     /// <summary>
-    /// Completes the run. The status depends on whether any document was rejected.
+    /// Completes the run. Status is Success, or PartialSuccess if any document was rejected.
     /// </summary>
     public void Complete(DateTimeOffset utcNow)
     {
         EnsureRunning();
+
+        // Every received document must be accounted for exactly once.
+        var processed = DocumentsCreated + DocumentsUpdated + DocumentsSkipped;
+        if (processed != DocumentsReceived)
+            throw new InvalidEntityDataException(nameof(SyncLog), nameof(DocumentsReceived),
+                $"counters mismatch: received {DocumentsReceived}, processed {processed}.");
+
         Status = _errors.Count == 0 ? SyncStatus.Success : SyncStatus.PartialSuccess;
-        FinishedAt = utcNow;
+        FinishedAt = Guard.Utc(utcNow);
     }
 
     /// <summary>
-    /// Marks the run as failed with a fatal error.
+    /// Marks the run as failed. Counters are reset because nothing from this run was persisted.
     /// </summary>
     public void Fail(string errorMessage, DateTimeOffset utcNow)
     {
         EnsureRunning();
         Status = SyncStatus.Failed;
-        ErrorMessage = errorMessage;
-        FinishedAt = utcNow;
+        ErrorMessage = Truncate(errorMessage, FieldLimits.ErrorMessage);
+        DocumentsCreated = 0;
+        DocumentsUpdated = 0;
+        DocumentsSkipped = 0;
+        _errors.Clear();
+        FinishedAt = Guard.Utc(utcNow);
     }
 
     public void MarkGoogleSheetSent(DateTimeOffset utcNow)
     {
         GoogleSheetStatus = GoogleSheetStatus.Sent;
         GoogleSheetError = null;
-        GoogleSheetSentAt = utcNow;
+        GoogleSheetSentAt = Guard.Utc(utcNow);
     }
 
     public void MarkGoogleSheetFailed(string error)
     {
         GoogleSheetStatus = GoogleSheetStatus.Failed;
-        GoogleSheetError = error;
+        GoogleSheetError = Truncate(error, FieldLimits.ErrorMessage);
     }
 
     private void EnsureRunning()
     {
         if (IsFinished)
-            throw new DomainException($"Sync run {Id} is already finished.");
+            throw new SyncRunAlreadyFinishedException(Id, Status.Name);
     }
+
+    private static string Truncate(string value, int maxLength) =>
+        value.Length <= maxLength ? value : value[..maxLength];
 }

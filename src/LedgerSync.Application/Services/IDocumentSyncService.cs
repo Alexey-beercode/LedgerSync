@@ -1,3 +1,4 @@
+using LedgerSync.Application.Common.Exceptions;
 using LedgerSync.Application.Contracts.Sync;
 
 namespace LedgerSync.Application.Services;
@@ -9,7 +10,8 @@ public interface IDocumentSyncService
 {
     /// <summary>
     /// Runs a full sync: fetch, create/update/skip, write SyncLog, report to Google Sheets.
-    /// Never throws for source or Google errors — they are reflected in the result.
+    /// Source, database and Google errors do not throw — they are reflected in the result and SyncLog.
     /// </summary>
+    /// <exception cref="SyncAlreadyRunningException">Another run is in progress.</exception>
     Task<SyncResultDto> RunAsync(CancellationToken cancellationToken);
 }

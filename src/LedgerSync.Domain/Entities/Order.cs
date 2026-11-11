@@ -1,5 +1,4 @@
 using LedgerSync.Domain.Common;
-using LedgerSync.Domain.Exceptions;
 
 namespace LedgerSync.Domain.Entities;
 
@@ -22,18 +21,10 @@ public sealed class Order : Entity
     // Required by EF Core.
     private Order() { }
 
-    public static Order Create(string orderNumber, string clientName, DateTimeOffset utcNow)
+    public static Order Create(string orderNumber, string clientName, DateTimeOffset utcNow) => new()
     {
-        if (string.IsNullOrWhiteSpace(orderNumber))
-            throw new DomainException("Order number is required.");
-        if (string.IsNullOrWhiteSpace(clientName))
-            throw new DomainException("Client name is required.");
-
-        return new Order
-        {
-            OrderNumber = orderNumber.Trim(),
-            ClientName = clientName.Trim(),
-            CreatedAt = utcNow
-        };
-    }
+        OrderNumber = Guard.NotEmpty(orderNumber, nameof(Order), nameof(OrderNumber), FieldLimits.OrderNumber),
+        ClientName = Guard.NotEmpty(clientName, nameof(Order), nameof(ClientName), FieldLimits.ClientName),
+        CreatedAt = Guard.Utc(utcNow)
+    };
 }

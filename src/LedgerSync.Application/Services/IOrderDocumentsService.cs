@@ -1,3 +1,4 @@
+using LedgerSync.Application.Common.Exceptions;
 using LedgerSync.Application.Contracts.Orders;
 
 namespace LedgerSync.Application.Services;
@@ -7,8 +8,7 @@ namespace LedgerSync.Application.Services;
 /// </summary>
 public interface IOrderDocumentsService
 {
-    /// <summary>
-    /// Returns documents of the order, or null if the order does not exist.
-    /// </summary>
-    Task<OrderDocumentsDto?> GetByOrderNumberAsync(string orderNumber, CancellationToken cancellationToken);
+    /// <summary>Returns documents of the order.</summary>
+    /// <exception cref="OrderNotFoundException">Order does not exist.</exception>
+    Task<OrderDocumentsDto> GetByOrderNumberAsync(string orderNumber, CancellationToken cancellationToken);
 }
