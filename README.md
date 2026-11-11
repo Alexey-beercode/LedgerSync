@@ -144,8 +144,8 @@ dotnet test tests/LedgerSync.UnitTests
 Статусы и типы хранятся строками (`Invoice`, `Signed`, `PartialSuccess`…), чтобы данные читались без справочников.
 Одновременную запись исключает advisory lock (см. п. 4), поэтому оптимистичные блокировки не нужны.
 
-**Демо-данные не входят в миграции.** Заказы `ORD-001`, `ORD-002`, `ORD-003` добавляет `DemoDataSeeder`
-только при `Persistence:SeedDemoData=true` (Development, Docker, тесты). Seeder идемпотентен: добавляет только
+**Демо-данные не входят в миграции.** Заказы `ORD-001`, `ORD-002`, `ORD-003` добавляет `DatabaseInitializer`
+только при `Persistence:SeedDemoData=true` (Development, Docker, тесты). Добавление идемпотентно: создаются только
 отсутствующие заказы. `ORD-404` специально отсутствует — на нём показан сценарий «несуществующий заказ».
 
 Миграции лежат в `src/LedgerSync.Infrastructure/Persistence/Migrations` и применяются при старте
