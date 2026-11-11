@@ -35,7 +35,6 @@ public sealed class ProductionSafetyTests(PostgresFixture postgres) : IAsyncLife
         var error = Assert.ThrowsAny<Exception>(() => api.CreateClient());
 
         Assert.Contains("BaseUrl", error.ToString());
-        Assert.Contains("Mode", error.ToString());
     }
 
     [Fact]

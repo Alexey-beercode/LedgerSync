@@ -29,7 +29,6 @@ public sealed class LedgerSyncApiFactory(
         builder.UseSetting("MockExternalApi:Enabled", mockExternalApiEnabled.ToString());
         builder.UseSetting("ExternalApi:BaseUrl", "http://localhost");
         builder.UseSetting("ExternalApi:MaxRetryAttempts", "1");
-        builder.UseSetting("GoogleSheets:Mode", "File");
         builder.UseSetting("GoogleSheets:FilePath", SheetPath);
 
         builder.ConfigureTestServices(services =>

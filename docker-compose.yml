@@ -31,8 +31,6 @@ services:
       Persistence__SeedDemoData: "true"
       MockExternalApi__Enabled: "true"
       ExternalApi__BaseUrl: "http://localhost:8080"
-      GoogleSheets__Mode: ${GOOGLE_SHEETS_MODE:-File}
-      GoogleSheets__AppsScriptUrl: ${GOOGLE_SHEETS_APPS_SCRIPT_URL:-}
       Logging__Console__FormatterName: json
     ports:
       - "${API_PORT:-8080}:8080"

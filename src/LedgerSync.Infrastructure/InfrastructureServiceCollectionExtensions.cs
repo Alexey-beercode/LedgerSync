@@ -24,7 +24,7 @@ public static class InfrastructureServiceCollectionExtensions
     {
         services.AddPersistence(configuration);
         services.AddExternalSource();
-        services.AddGoogleSheets(configuration);
+        services.AddGoogleSheets();
         services.AddSingleton(TimeProvider.System);
 
         return services;
@@ -58,43 +58,29 @@ public static class InfrastructureServiceCollectionExtensions
             .ValidateDataAnnotations()
             .ValidateOnStart();
 
+        // The standard handler provides timeouts, exponential backoff with jitter and a circuit breaker;
+        // only the number of retries and a short base delay are tuned.
         services.AddHttpClient<IExternalDocumentsClient, HttpExternalDocumentsClient>((sp, client) =>
                 client.BaseAddress = new Uri(sp.GetRequiredService<IOptions<ExternalApiOptions>>().Value.BaseUrl))
             .AddStandardResilienceHandler()
             .Configure((resilience, sp) =>
-                ConfigureRetries(resilience, sp.GetRequiredService<IOptions<ExternalApiOptions>>().Value.MaxRetryAttempts));
+            {
+                resilience.Retry.MaxRetryAttempts = sp.GetRequiredService<IOptions<ExternalApiOptions>>().Value.MaxRetryAttempts;
+                resilience.Retry.Delay = TimeSpan.FromMilliseconds(500);
+            });
     }
 
-    private static void AddGoogleSheets(this IServiceCollection services, IConfiguration configuration)
+    /// <summary>
+    /// Mock Google Sheets journal (option C of the assignment). A real integration is another
+    /// <see cref="IGoogleSheetLogger"/> implementation registered here instead.
+    /// </summary>
+    private static void AddGoogleSheets(this IServiceCollection services)
     {
         services.AddOptions<GoogleSheetsOptions>()
             .BindConfiguration(GoogleSheetsOptions.SectionName)
             .ValidateDataAnnotations()
             .ValidateOnStart();
 
-        // A missing mode is reported by ValidateOnStart; the registration below just has to pick something.
-        var mode = configuration.GetSection(GoogleSheetsOptions.SectionName)
-            .GetValue<GoogleSheetsMode?>(nameof(GoogleSheetsOptions.Mode));
-
-        if (mode != GoogleSheetsMode.AppsScript)
-        {
-            services.AddSingleton<IGoogleSheetLogger, FileGoogleSheetLogger>();
-            return;
-        }
-
-        services.AddHttpClient<IGoogleSheetLogger, AppsScriptGoogleSheetLogger>()
-            .AddStandardResilienceHandler()
-            .Configure((resilience, sp) =>
-                ConfigureRetries(resilience, sp.GetRequiredService<IOptions<GoogleSheetsOptions>>().Value.MaxRetryAttempts));
-    }
-
-    /// <summary>
-    /// The standard handler already provides timeouts, exponential backoff with jitter and a circuit breaker;
-    /// only the number of retries and a short base delay are tuned here.
-    /// </summary>
-    private static void ConfigureRetries(HttpStandardResilienceOptions resilience, int maxRetries)
-    {
-        resilience.Retry.MaxRetryAttempts = maxRetries;
-        resilience.Retry.Delay = TimeSpan.FromMilliseconds(500);
+        services.AddSingleton<IGoogleSheetLogger, FileGoogleSheetLogger>();
     }
 }
