@@ -99,8 +99,8 @@ dotnet test
 
 | Проект | Что проверяет | Требования |
 |---|---|---|
-| `tests/LedgerSync.UnitTests` (51 тест) | Use case синхронизации на реальных репозиториях поверх EF Core InMemory, валидация, доменные инварианты | ничего |
-| `tests/LedgerSync.IntegrationTests` (13 тестов) | Весь путь по HTTP: API → use case → **настоящий PostgreSQL** (Testcontainers); unique index, advisory lock, отказ Google | запущенный Docker |
+| `tests/LedgerSync.UnitTests` (51 тест) | Обработчики команд и запросов на реальном unit of work поверх EF Core InMemory, валидация, доменные инварианты | ничего |
+| `tests/LedgerSync.IntegrationTests` (13 тестов) | Весь путь по HTTP: API → обработчик → **настоящий PostgreSQL** (Testcontainers); unique index, advisory lock, отказ Google | запущенный Docker |
 
 Только unit-тесты (без Docker):
 
@@ -108,18 +108,18 @@ dotnet test
 dotnet test tests/LedgerSync.UnitTests
 ```
 
-Все 7 обязательных сценариев из задания покрыты в `DocumentSyncServiceTests` (тесты помечены номерами 1–7)
+Все 7 обязательных сценариев из задания покрыты в `SyncDocumentsCommandHandlerTests` (тесты помечены номерами 1–7)
 и повторно — end-to-end в интеграционных тестах:
 
 | № | Сценарий | Тест |
 |---|---|---|
-| 1 | Повторный запуск не создаёт дубли | `RunAsync_SameDataTwice_DoesNotCreateDuplicates`, `Sync_RunTwice_StoresEachDocumentOnce` |
-| 2 | Новый документ создаётся | `RunAsync_NewDocument_IsCreatedWithAllFields` |
-| 3 | Изменение статуса обновляет документ | `RunAsync_StatusChanged_UpdatesDocument`, `Sync_ChangedSource_UpdatesAndCreates` |
-| 4 | Несуществующий заказ — по выбранной логике | `RunAsync_UnknownOrder_RejectsDocumentAndKeepsOthers`, `Sync_MixedBatch_...` |
-| 5 | Ошибка источника сохраняется в SyncLog | `RunAsync_ExternalSourceFails_RecordsFailedRun`, `Sync_SourceBroken_...` |
-| 6 | Успешный результат уходит в `IGoogleSheetLogger` | `RunAsync_Success_SendsRunToGoogleSheets` |
-| 7 | Ошибка Google не откатывает документы | `RunAsync_GoogleSheetsUnavailable_...`, `GoogleSheetsDown_DocumentsStaySavedAndRunCanBeResent` |
+| 1 | Повторный запуск не создаёт дубли | `Handle_SameDataTwice_DoesNotCreateDuplicates`, `Sync_RunTwice_StoresEachDocumentOnce` |
+| 2 | Новый документ создаётся | `Handle_NewDocument_IsCreatedWithAllFields` |
+| 3 | Изменение статуса обновляет документ | `Handle_StatusChanged_UpdatesDocument`, `Sync_ChangedSource_UpdatesAndCreates` |
+| 4 | Несуществующий заказ — по выбранной логике | `Handle_UnknownOrder_RejectsDocumentAndKeepsOthers`, `Sync_MixedBatch_...` |
+| 5 | Ошибка источника сохраняется в SyncLog | `Handle_ExternalSourceFails_RecordsFailedRun`, `Sync_SourceBroken_...` |
+| 6 | Успешный результат уходит в `IGoogleSheetLogger` | `Handle_Success_SendsRunToGoogleSheets` |
+| 7 | Ошибка Google не откатывает документы | `Handle_GoogleSheetsUnavailable_...`, `GoogleSheetsDown_DocumentsStaySavedAndRunCanBeResent` |
 
 ## 3. База данных
 
@@ -154,8 +154,8 @@ dotnet ef migrations script -p src/LedgerSync.Infrastructure -s src/LedgerSync.A
 
 ## 4. Как устроена синхронизация
 
-`POST /api/sync/documents` → `DocumentSyncService.RunAsync`
-([src/LedgerSync.Application/Sync/DocumentSyncService.cs](src/LedgerSync.Application/Sync/DocumentSyncService.cs)):
+`POST /api/sync/documents` → `SyncDocumentsCommandHandler.HandleAsync`
+([SyncDocumentsCommandHandler.cs](src/LedgerSync.Application/Features/Sync/SyncDocuments/SyncDocumentsCommandHandler.cs)):
 
 ```mermaid
 flowchart TD
@@ -352,9 +352,39 @@ Api ──► Infrastructure ──► Application ──► Domain
 | Проект | Ответственность |
 |---|---|
 | `LedgerSync.Domain` | Сущности (`Order`, `ExternalDocument`, `SyncLog`, `SyncLogError`), Enumeration-классы, инварианты. Без внешних зависимостей |
-| `LedgerSync.Application` | Use cases (`DocumentSyncService`, `SyncLogService`, `OrderDocumentsService`), порты (интерфейсы), DTO, валидаторы, мапперы, структурированные log-события |
-| `LedgerSync.Infrastructure` | EF Core + PostgreSQL, репозитории, unit of work, advisory lock, HTTP-клиент внешнего API, Google-логгеры |
+| `LedgerSync.Application` | Команды и запросы с обработчиками (`Features/*`), порты (интерфейсы), DTO, валидаторы, мапперы, структурированные log-события |
+| `LedgerSync.Infrastructure` | EF Core + PostgreSQL, unit of work с репозиториями, advisory lock, HTTP-клиент внешнего API, Google-логгеры |
 | `LedgerSync.Api` | Контроллеры, глобальный exception handler, health checks, OpenAPI, mock внешней системы, composition root |
+
+### CQRS
+
+Команды меняют состояние, запросы только читают. У каждой операции свой обработчик:
+
+| Тип | Операция | Endpoint |
+|---|---|---|
+| Command | `SyncDocumentsCommand` | `POST /api/sync/documents` |
+| Command | `ResendLatestSyncLogCommand` | `POST /api/sync/logs/latest/send-to-google` |
+| Query | `GetSyncLogsQuery` | `GET /api/sync/logs` |
+| Query | `GetOrderDocumentsQuery` | `GET /api/orders/{orderNumber}/documents` |
+
+Реализация намеренно лёгкая, без enterprise-обвязки:
+
+- **Без MediatR и диспетчера.** Интерфейсы `ICommand`/`IQuery` и `ICommandHandler`/`IQueryHandler`
+  ([Cqrs.cs](src/LedgerSync.Application/Abstractions/Messaging/Cqrs.cs)) занимают несколько строк. Контроллер
+  получает нужный обработчик через `[FromServices]`, поэтому путь вызова виден без «магии». MediatR с v13
+  распространяется по коммерческой лицензии, а для четырёх операций посредник ничего не даёт.
+- **Без pipeline behaviors.** Валидация — один явный вызов `ValidateAndThrowAsync` в начале обработчика.
+- **Одна модель данных** для чтения и записи, без отдельных read-моделей и баз.
+- **Небольшие фичи в одном файле**: запрос, валидатор и обработчик рядом (`Features/SyncLogs/GetSyncLogs.cs`).
+  Синхронизация, как самая сложная операция, разложена на отдельные файлы.
+
+### Unit of Work
+
+`IUnitOfWork` — единственная зависимость обработчиков от слоя хранения. Он отдаёт репозитории
+(`Orders`, `Documents`, `SyncLogs`) поверх одного `DbContext`, и `SaveChangesAsync` фиксирует изменения всех
+репозиториев одной транзакцией. Репозитории отдельно в DI не регистрируются.
+
+### Настройка хоста
 
 Настройка хоста вынесена в extensions: [WebApplicationBuilderExtensions](src/LedgerSync.Api/Extensions/WebApplicationBuilderExtensions.cs)
 (`AddLedgerSyncServices`) и [WebApplicationExtensions](src/LedgerSync.Api/Extensions/WebApplicationExtensions.cs)
