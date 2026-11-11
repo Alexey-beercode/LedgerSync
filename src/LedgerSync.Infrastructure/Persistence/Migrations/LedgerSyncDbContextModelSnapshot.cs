@@ -173,10 +173,6 @@ namespace LedgerSync.Infrastructure.Persistence.Migrations
                         .HasColumnType("character varying(2000)")
                         .HasColumnName("google_sheet_error");
 
-                    b.Property<DateTimeOffset?>("GoogleSheetSentAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("google_sheet_sent_at");
-
                     b.Property<string>("GoogleSheetStatus")
                         .IsRequired()
                         .HasMaxLength(32)

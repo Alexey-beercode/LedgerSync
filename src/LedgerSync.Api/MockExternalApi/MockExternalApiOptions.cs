@@ -9,6 +9,4 @@ public sealed class MockExternalApiOptions
     public const string SectionName = "MockExternalApi";
 
     public bool Enabled { get; init; }
-
-    public MockExternalScenario Scenario { get; init; } = MockExternalScenario.Baseline;
 }

@@ -22,9 +22,7 @@ public sealed class GoogleSheetsOptions : IValidatableObject
     /// </summary>
     public string? AppsScriptUrl { get; init; }
 
-    [Range(1, 120)]
-    public int AttemptTimeoutSeconds { get; init; } = 15;
-
+    /// <summary>Retries of the Apps Script call; safe because the script upserts by runId.</summary>
     [Range(0, 10)]
     public int MaxRetryAttempts { get; init; } = 2;
 
