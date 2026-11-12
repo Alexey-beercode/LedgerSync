@@ -109,11 +109,11 @@ curl -X POST http://localhost:8080/api/sync/logs/latest/send-to-google
 Database state: no duplicates, no stuck runs.
 
 ```bash
-docker exec ledgersync-postgres psql -U postgres -d ledgersync -c "select external_id, order_number, amount, currency, status from external_documents order by 1"
+docker compose exec postgres psql -U postgres -d ledgersync -c "select external_id, order_number, amount, currency, status from external_documents order by 1"
 ```
 
 ```bash
-docker exec ledgersync-postgres psql -U postgres -d ledgersync -c "select status, documents_received, documents_created, documents_updated, documents_skipped, google_sheet_status, error_message from sync_logs order by started_at"
+docker compose exec postgres psql -U postgres -d ledgersync -c "select status, documents_received, documents_created, documents_updated, documents_skipped, google_sheet_status, error_message from sync_logs order by started_at"
 ```
 
 Structured run logs (JSON, every run record has a `RunId`):
