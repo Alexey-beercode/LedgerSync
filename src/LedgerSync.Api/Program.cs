@@ -10,6 +10,3 @@ await app.InitializeDatabaseAsync();
 app.UseLedgerSyncPipeline();
 
 await app.RunAsync();
-
-// Exposed for WebApplicationFactory in integration tests.
-public partial class Program;
