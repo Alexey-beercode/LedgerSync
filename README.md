@@ -104,6 +104,16 @@ enables migrations on startup, the demo orders and the external system mock. The
 Ready-made requests for every endpoint are in [src/LedgerSync.Api/LedgerSync.Api.http](src/LedgerSync.Api/LedgerSync.Api.http)
 (Visual Studio, Rider, VS Code REST Client).
 
+### If a port is busy
+
+| Port | Used by | How to change |
+|---|---|---|
+| `8080` | API in Docker | `API_PORT` in `.env` |
+| `5433` | PostgreSQL in Docker | `POSTGRES_PORT` in `.env`; for a local run also the port in `ConnectionStrings:LedgerSync` in `appsettings.Development.json` |
+| `5080` | API in a local run | `applicationUrl` in `Properties/launchSettings.json` and `ExternalApi:BaseUrl` in `appsettings.Development.json` (the mock is called over HTTP on the same port) |
+
+Container names are derived from the folder name, so several copies of the project can run side by side.
+
 ## 2. How to run the tests
 
 ```bash
