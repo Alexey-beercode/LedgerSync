@@ -51,41 +51,80 @@
 
 ## Как увидеть это вживую
 
-Сценарии mock-источника переключаются без перезапуска (адрес для Docker; локально — порт `5080`):
+Полный сценарий ручной проверки на чистой базе. Адреса даны для Docker (`docker compose up -d --build`);
+при локальном запуске порт `5080`. В Windows PowerShell вместо `curl` нужно писать `curl.exe`. Те же запросы
+есть в Scalar UI (`/scalar`) и в файле `src/LedgerSync.Api/LedgerSync.Api.http`.
+
+Синхронизация запускается одной и той же командой:
 
 ```bash
 curl -X POST http://localhost:8080/api/sync/documents
 ```
 
-```bash
-curl -X POST http://localhost:8080/api/sync/documents
-```
-
-Второй запуск: `documentsCreated: 0`, `documentsSkipped: 4` — дублей нет.
+Сценарий внешней системы переключается так (вместо `Updated` — нужный сценарий):
 
 ```bash
-curl -X PUT http://localhost:8080/mock/external/scenario/Mixed
+curl -X PUT http://localhost:8080/mock/external/scenario/Updated
+```
+
+| Шаг | Действие | Ожидаемый результат |
+|---|---|---|
+| 1 | Синхронизация (сценарий `Baseline` активен с запуска) | `Success`, `documentsCreated: 4` |
+| 2 | Синхронизация ещё раз | `documentsCreated: 0`, `documentsSkipped: 4` — дублей нет |
+| 3 | Сценарий `Updated`, синхронизация | `documentsCreated: 1`, `documentsUpdated: 2`, `documentsSkipped: 2` |
+| 4 | Сценарий `Mixed`, синхронизация | `PartialSuccess`, `documentsSkipped: 6`; сохранённые документы не изменились |
+| 5 | Сценарий `Stale`, синхронизация | `documentsSkipped: 1`: старая версия не затёрла новую |
+| 6 | Сценарий `Malformed`, синхронизация | `Failed`, `errorMessage: External source returned malformed JSON.` |
+| 7 | Сценарий `Unavailable`, синхронизация | `Failed` с причиной `HTTP 503` после повторов (около 2 секунд) |
+
+Причины отклонений из шага 4 (`EXT-BAD-001`, `EXT-BAD-002`, `EXT-INV-404`) видны в истории, поле `errors`:
+
+```bash
+curl "http://localhost:8080/api/sync/logs?take=10"
+```
+
+Документы заказа и ответ на несуществующий заказ (`404` в формате RFC 7807):
+
+```bash
+curl http://localhost:8080/api/orders/ORD-001/documents
 ```
 
 ```bash
-curl -X POST http://localhost:8080/api/sync/documents
+curl http://localhost:8080/api/orders/ORD-404/documents
 ```
 
-`PartialSuccess`: битые документы и `ORD-404` отклонены, причины видны в `GET /api/sync/logs`.
+Журнал Google Sheets: по одной строке на каждый запуск, включая неуспешные.
 
 ```bash
-curl -X PUT http://localhost:8080/mock/external/scenario/Unavailable
+docker compose exec api cat google-sheets-mock/sync-log.csv
+```
+
+Повторная отправка последнего запуска: статус `Sent`, число строк в журнале не меняется.
+
+```bash
+curl -X POST http://localhost:8080/api/sync/logs/latest/send-to-google
+```
+
+Состояние базы: дублей нет, зависших запусков нет.
+
+```bash
+docker exec ledgersync-postgres psql -U postgres -d ledgersync -c "select external_id, order_number, amount, currency, status from external_documents order by 1"
 ```
 
 ```bash
-curl -X POST http://localhost:8080/api/sync/documents
+docker exec ledgersync-postgres psql -U postgres -d ledgersync -c "select status, documents_received, documents_created, documents_updated, documents_skipped, google_sheet_status, error_message from sync_logs order by started_at"
 ```
 
-`Failed` с причиной `HTTP 503` после повторов. Документы не тронуты, запуск записан в журнал и в Google Sheets.
+Структурированные логи запусков (JSON, в каждой записи запуска есть `RunId`):
 
-Отказ Google проверяется автотестами (`Handle_GoogleSheetsUnavailable_...`, `GoogleSheetsDown_...`): документы сохранены,
-`googleSheetStatus: Failed`, а повторная отправка `POST /api/sync/logs/{runId}/send-to-google` даёт `Sent`,
-и строка в таблице одна.
+```bash
+docker compose logs api
+```
+
+Отказ Google, параллельные запуски, откат при ошибке базы и восстановление после падения процесса вручную
+воспроизводить неудобно; они проверяются автотестами (`Handle_GoogleSheetsUnavailable_...`,
+`GoogleSheetsDown_DocumentsStaySavedAndRunCanBeResent`, `Sync_WhileAnotherRunHoldsLock_Returns409`,
+`Handle_DatabaseSaveFails_...`, `Handle_RunLeftRunningAfterCrash_IsMarkedAsFailed`).
 
 ## Структурированные события
 
