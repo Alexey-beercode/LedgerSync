@@ -1,0 +1,62 @@
+[
+  {
+    "externalId": "EXT-INV-001",
+    "orderNumber": "ORD-001",
+    "documentType": "Invoice",
+    "documentNumber": "INV-2026-001",
+    "amount": 150000.00,
+    "currency": "KZT",
+    "status": "Created",
+    "externalUpdatedAt": "2026-06-20T10:00:00Z"
+  },
+  {
+    "externalId": "EXT-INV-001",
+    "orderNumber": "ORD-001",
+    "documentType": "Invoice",
+    "documentNumber": "INV-2026-001",
+    "amount": 150000.00,
+    "currency": "KZT",
+    "status": "Created",
+    "externalUpdatedAt": "2026-06-19T10:00:00Z"
+  },
+  {
+    "externalId": "EXT-ACT-001",
+    "orderNumber": "ORD-001",
+    "documentType": "ActOfWork",
+    "documentNumber": "ACT-2026-001",
+    "amount": 150000.00,
+    "currency": "KZT",
+    "status": "Signed",
+    "externalUpdatedAt": "2026-06-21T12:00:00Z"
+  },
+  {
+    "externalId": "EXT-INV-404",
+    "orderNumber": "ORD-404",
+    "documentType": "Invoice",
+    "documentNumber": "INV-2026-404",
+    "amount": 10000.00,
+    "currency": "KZT",
+    "status": "Created",
+    "externalUpdatedAt": "2026-06-24T10:00:00Z"
+  },
+  {
+    "externalId": "EXT-BAD-001",
+    "orderNumber": "ORD-002",
+    "documentType": "Receipt",
+    "documentNumber": "",
+    "amount": -500.00,
+    "currency": "TENGE",
+    "status": "Paid",
+    "externalUpdatedAt": "2026-06-24T11:00:00Z"
+  },
+  {
+    "externalId": "EXT-BAD-002",
+    "orderNumber": "ORD-002",
+    "documentType": "Invoice",
+    "documentNumber": "INV-2026-BAD",
+    "amount": "not-a-number",
+    "currency": "KZT",
+    "status": "Created",
+    "externalUpdatedAt": "2026-06-24T12:00:00Z"
+  }
+]

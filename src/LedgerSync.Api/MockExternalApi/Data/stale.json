@@ -1,0 +1,12 @@
+[
+  {
+    "externalId": "EXT-ACT-001",
+    "orderNumber": "ORD-001",
+    "documentType": "ActOfWork",
+    "documentNumber": "ACT-2026-001",
+    "amount": 150000.00,
+    "currency": "KZT",
+    "status": "Created",
+    "externalUpdatedAt": "2026-06-18T09:00:00Z"
+  }
+]

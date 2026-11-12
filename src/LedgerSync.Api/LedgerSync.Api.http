@@ -1,3 +1,40 @@
-@baseUrl = http://localhost:5000
+### LedgerSync API requests.
+### Local run: http://localhost:5080, Docker: http://localhost:8080
+@baseUrl = http://localhost:5080
 
-### Requests will be added together with the API layer.
+### ---------- Mock external system ----------
+
+### Active scenario
+GET {{baseUrl}}/mock/external/scenario
+
+### Switch scenario: Baseline | Updated | Mixed | Stale | Malformed | Unavailable
+PUT {{baseUrl}}/mock/external/scenario/Baseline
+
+### Raw documents returned by the mock source
+GET {{baseUrl}}/mock/external/documents
+
+### ---------- Synchronization ----------
+
+### Run sync (repeat it: the second run must create 0 documents)
+POST {{baseUrl}}/api/sync/documents
+
+### Sync history, newest first
+GET {{baseUrl}}/api/sync/logs?take=20
+
+### Resend the latest run to Google Sheets (idempotent)
+POST {{baseUrl}}/api/sync/logs/latest/send-to-google
+
+### Resend a specific run (take runId from /api/sync/logs)
+@runId = 00000000-0000-0000-0000-000000000000
+POST {{baseUrl}}/api/sync/logs/{{runId}}/send-to-google
+
+### ---------- Orders ----------
+
+### Documents of an order
+GET {{baseUrl}}/api/orders/ORD-001/documents
+
+### Unknown order -> 404 problem details
+GET {{baseUrl}}/api/orders/ORD-404/documents
+
+### Invalid query -> 400 validation problem details
+GET {{baseUrl}}/api/sync/logs?take=0
