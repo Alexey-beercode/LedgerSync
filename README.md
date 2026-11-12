@@ -1,70 +1,71 @@
 # LedgerSync
 
-Сервис синхронизации финансовых документов (счета, акты выполненных работ) из внешней системы во внутреннюю
-базу Order Management. Защищает от дублей, обновляет статусы, ведёт историю синхронизаций и отправляет журнал
-каждого запуска в Google Sheets.
+A service that synchronizes financial documents (invoices and acts of work) from an external system into the
+internal Order Management database. It protects against duplicates, keeps statuses up to date, records the history
+of every sync run and sends a journal row for each run to Google Sheets.
 
-> Главный фокус решения — **надёжность и точность данных**. Сводка ключевых решений — в разделе
-> [Надёжность, точность данных и безопасность](#надёжность-точность-данных-и-безопасность-ключевые-решения).
-> Полная карта «риск → защита → место в коде → тест» — в [docs/reliability.md](docs/reliability.md).
+> The main focus of the solution is **reliability and data accuracy**. The key decisions are summarized in
+> [Reliability, data accuracy and security](#reliability-data-accuracy-and-security-key-decisions).
+> The full "risk → protection → code → test" map is in [docs/reliability.md](docs/reliability.md).
 
-## Содержание
+## Contents
 
-1. [Как запустить проект](#1-как-запустить-проект)
-2. [Как запустить тесты](#2-как-запустить-тесты)
-3. [База данных](#3-база-данных)
-4. [Как устроена синхронизация](#4-как-устроена-синхронизация)
-5. [Как решена проблема дублей](#5-как-решена-проблема-дублей)
+1. [How to run the project](#1-how-to-run-the-project)
+2. [How to run the tests](#2-how-to-run-the-tests)
+3. [Database](#3-database)
+4. [How synchronization works](#4-how-synchronization-works)
+5. [How duplicates are prevented](#5-how-duplicates-are-prevented)
 6. [Google Sheets interface](#6-google-sheets-interface)
-7. [Документы по несуществующим заказам](#7-документы-по-несуществующим-заказам)
-8. [Ограничения текущего решения](#8-ограничения-текущего-решения)
-9. [Что улучшить перед production](#9-что-улучшить-перед-production)
-10. [Использование AI-инструментов](#10-использование-ai-инструментов)
+7. [Documents for non-existent orders](#7-documents-for-non-existent-orders)
+8. [Limitations of the current solution](#8-limitations-of-the-current-solution)
+9. [What to improve before production](#9-what-to-improve-before-production)
+10. [Use of AI tools](#10-use-of-ai-tools)
 
-Дополнительно: [надёжность, точность данных и безопасность](#надёжность-точность-данных-и-безопасность-ключевые-решения),
-[архитектура](#архитектура), [API](#api), [mock внешней системы](#mock-внешней-системы),
-[конфигурация](#конфигурация), [принятые решения](#принятые-решения).
+Also: [reliability, data accuracy and security](#reliability-data-accuracy-and-security-key-decisions),
+[architecture](#architecture), [API](#api), [external system mock](#external-system-mock),
+[configuration](#configuration), [design decisions](#design-decisions).
 
 ---
 
-## Стек
+## Stack
 
 | | |
 |---|---|
-| Платформа | .NET 10, ASP.NET Core Web API (controllers) |
-| БД | PostgreSQL 17, Entity Framework Core 10 (Npgsql), миграции EF Core |
-| Валидация | FluentValidation |
-| Устойчивость HTTP | Microsoft.Extensions.Http.Resilience (Polly): retry, timeouts, circuit breaker |
-| Документация API | OpenAPI + Scalar UI |
-| Тесты | xUnit, EF Core InMemory, Testcontainers (PostgreSQL), WebApplicationFactory |
-| Инфраструктура | Docker, Docker Compose |
+| Platform | .NET 10, ASP.NET Core Web API (controllers) |
+| Database | PostgreSQL 17, Entity Framework Core 10 (Npgsql), EF Core migrations |
+| Validation | FluentValidation |
+| HTTP resilience | Microsoft.Extensions.Http.Resilience (Polly): retry, timeouts, circuit breaker |
+| API documentation | OpenAPI + Scalar UI |
+| Tests | xUnit, EF Core InMemory, Testcontainers (PostgreSQL), WebApplicationFactory |
+| Infrastructure | Docker, Docker Compose |
 
-**Почему .NET 10, а не рекомендованные .NET 8/9.** .NET 10 — текущий LTS-релиз (поддержка до ноября 2028),
-он обратно совместим с API .NET 8/9, и всё используемое в решении (ASP.NET Core, EF Core, Npgsql) доступно
-в нём в стабильных версиях. .NET 9 — STS-релиз с более коротким сроком поддержки. Код не использует
-специфичных для .NET 10 возможностей, поэтому при необходимости переводится на .NET 8 сменой `TargetFramework`
-и версий пакетов.
+**Why .NET 10 instead of the recommended .NET 8/9.** .NET 10 is the current LTS release (supported until
+November 2028). It is backward compatible with the .NET 8/9 APIs, and everything the solution uses (ASP.NET Core,
+EF Core, Npgsql) is available for it in stable versions. .NET 9 is an STS release with a shorter support window.
+The code does not rely on .NET 10-specific features, so it can be moved to .NET 8 by changing `TargetFramework`
+and package versions.
 
-## 1. Как запустить проект
+## 1. How to run the project
 
-### Вариант A — Docker Compose (рекомендуется)
+### Option A — Docker Compose (recommended)
 
-Нужен только Docker.
+Only Docker is required.
 
 ```bash
 docker compose up -d --build
 ```
 
-| Что | Адрес |
+| What | Address |
 |---|---|
 | API | http://localhost:8080 |
-| Scalar UI (документация API) | http://localhost:8080/scalar |
-| PostgreSQL | `localhost:5433`, БД `ledgersync`, `postgres` / `postgres` |
+| Scalar UI (API documentation) | http://localhost:8080/scalar |
+| PostgreSQL | `localhost:5433`, database `ledgersync`, `postgres` / `postgres` |
 
-Миграции применяются автоматически при старте, демо-заказы `ORD-001…ORD-003` добавляются, mock внешней системы
-включён. Всё это включено явно в `docker-compose.yml`. Порты и пароль можно поменять: скопируйте `.env.example` в `.env`.
+Migrations are applied automatically on startup, the demo orders `ORD-001…ORD-003` are added and the external
+system mock is enabled. All of this is switched on explicitly in `docker-compose.yml`. Ports and the password can be
+changed: copy `.env.example` to `.env`.
 
-Быстрая проверка:
+Quick check:
 
 ```bash
 curl -X POST http://localhost:8080/api/sync/documents
@@ -74,15 +75,15 @@ curl -X POST http://localhost:8080/api/sync/documents
 curl http://localhost:8080/api/orders/ORD-001/documents
 ```
 
-Остановить (с удалением данных — добавить `-v`):
+Stop (add `-v` to delete the data as well):
 
 ```bash
 docker compose down
 ```
 
-### Вариант B — локально через .NET SDK
+### Option B — locally with the .NET SDK
 
-Нужны .NET 10 SDK и PostgreSQL. Проще всего поднять только базу из compose:
+Requires the .NET 10 SDK and PostgreSQL. The easiest way is to start only the database from compose:
 
 ```bash
 docker compose up -d postgres
@@ -92,66 +93,67 @@ docker compose up -d postgres
 dotnet run --project src/LedgerSync.Api --launch-profile http
 ```
 
-API будет на http://localhost:5080, Scalar UI — http://localhost:5080/scalar. Окружение `Development`
-включает миграции при старте, демо-заказы и mock внешней системы. Строка подключения —
-в `src/LedgerSync.Api/appsettings.Development.json`.
+The API runs at http://localhost:5080, Scalar UI at http://localhost:5080/scalar. The `Development` environment
+enables migrations on startup, the demo orders and the external system mock. The connection string is in
+`src/LedgerSync.Api/appsettings.Development.json`.
 
-> В окружении `Production` демо-функции выключены, а адрес внешней системы (`ExternalApi:BaseUrl`) обязателен.
-> Без него приложение не стартует и сообщает, чего не хватает (проверено тестом).
+> In the `Production` environment the demo features are off and the external system address
+> (`ExternalApi:BaseUrl`) is required. Without it the application refuses to start and says what is missing
+> (covered by a test).
 
-Готовые запросы ко всем endpoint'ам — [src/LedgerSync.Api/LedgerSync.Api.http](src/LedgerSync.Api/LedgerSync.Api.http)
+Ready-made requests for every endpoint are in [src/LedgerSync.Api/LedgerSync.Api.http](src/LedgerSync.Api/LedgerSync.Api.http)
 (Visual Studio, Rider, VS Code REST Client).
 
-## 2. Как запустить тесты
+## 2. How to run the tests
 
 ```bash
 dotnet test
 ```
 
-| Проект | Что проверяет | Требования |
+| Project | What it checks | Requirements |
 |---|---|---|
-| `tests/LedgerSync.UnitTests` | Обработчики команд и запросов на реальном unit of work поверх EF Core InMemory, валидация, доменные инварианты, HTTP-клиент внешнего API на подменённом транспорте, mock-логгер Google Sheets | ничего |
-| `tests/LedgerSync.IntegrationTests` | Весь путь по HTTP: API → обработчик → **настоящий PostgreSQL** (Testcontainers); unique index, advisory lock, отказ Google, отсутствие demo-функций в production | запущенный Docker |
+| `tests/LedgerSync.UnitTests` | Command and query handlers on the real unit of work over EF Core InMemory, validation, domain invariants, the external API HTTP client over a stubbed transport, the Google Sheets mock logger | none |
+| `tests/LedgerSync.IntegrationTests` | The whole path over HTTP: API → handler → **real PostgreSQL** (Testcontainers); unique index, advisory lock, Google failure, no demo features in production | Docker running |
 
-Только unit-тесты (без Docker):
+Unit tests only (no Docker):
 
 ```bash
 dotnet test tests/LedgerSync.UnitTests
 ```
 
-Все 7 обязательных сценариев из задания покрыты в `SyncDocumentsCommandHandlerTests` (тесты помечены номерами 1–7)
-и повторно — end-to-end в интеграционных тестах:
+All 7 mandatory scenarios from the assignment are covered in `SyncDocumentsCommandHandlerTests` (the tests are
+numbered 1–7) and again end to end in the integration tests:
 
-| № | Сценарий | Тест |
+| # | Scenario | Test |
 |---|---|---|
-| 1 | Повторный запуск не создаёт дубли | `Handle_SameDataTwice_DoesNotCreateDuplicates`, `Sync_RunTwice_StoresEachDocumentOnce` |
-| 2 | Новый документ создаётся | `Handle_NewDocument_IsCreatedWithAllFields` |
-| 3 | Изменение статуса обновляет документ | `Handle_StatusChanged_UpdatesDocument`, `Sync_ChangedSource_UpdatesAndCreates` |
-| 4 | Несуществующий заказ — по выбранной логике | `Handle_UnknownOrder_RejectsDocumentAndKeepsOthers`, `Sync_MixedBatch_...` |
-| 5 | Ошибка источника сохраняется в SyncLog | `Handle_ExternalSourceFails_RecordsFailedRun`, `Sync_SourceBroken_...` |
-| 6 | Успешный результат уходит в `IGoogleSheetLogger` | `Handle_Success_SendsRunToGoogleSheets` |
-| 7 | Ошибка Google не откатывает документы | `Handle_GoogleSheetsUnavailable_...`, `GoogleSheetsDown_DocumentsStaySavedAndRunCanBeResent` |
+| 1 | A repeated run creates no duplicates | `Handle_SameDataTwice_DoesNotCreateDuplicates`, `Sync_RunTwice_StoresEachDocumentOnce` |
+| 2 | A new document is created | `Handle_NewDocument_IsCreatedWithAllFields` |
+| 3 | A status change updates the document | `Handle_StatusChanged_UpdatesDocument`, `Sync_ChangedSource_UpdatesAndCreates` |
+| 4 | A non-existent order is handled by the chosen rule | `Handle_UnknownOrder_RejectsDocumentAndKeepsOthers`, `Sync_MixedBatch_...` |
+| 5 | A source error is saved in SyncLog | `Handle_ExternalSourceFails_RecordsFailedRun`, `Sync_SourceBroken_...` |
+| 6 | A successful result is sent to `IGoogleSheetLogger` | `Handle_Success_SendsRunToGoogleSheets` |
+| 7 | A Google error does not roll back documents | `Handle_GoogleSheetsUnavailable_...`, `GoogleSheetsDown_DocumentsStaySavedAndRunCanBeResent` |
 
-## 3. База данных
+## 3. Database
 
-**PostgreSQL 17**, доступ через **EF Core 10** (Npgsql), имена в `snake_case`.
+**PostgreSQL 17**, accessed through **EF Core 10** (Npgsql), `snake_case` names.
 
-| Таблица | Назначение | Важное |
+| Table | Purpose | Notes |
 |---|---|---|
-| `orders` | Внутренние заказы | unique `order_number` |
-| `external_documents` | Документы из внешней системы | **unique `external_id`**, FK на `orders`, `CHECK amount >= 0`, индекс по `order_number`, `numeric(18,2)` для сумм |
-| `sync_logs` | История запусков | статус запуска и статус доставки в Google, индекс по `started_at DESC` |
-| `sync_log_errors` | Отклонённые документы конкретного запуска | `external_id` + причина |
+| `orders` | Internal orders | unique `order_number` |
+| `external_documents` | Documents from the external system | **unique `external_id`**, FK to `orders`, `CHECK amount >= 0`, index on `order_number`, `numeric(18,2)` for amounts |
+| `sync_logs` | Run history | run status and Google delivery status, index on `started_at DESC` |
+| `sync_log_errors` | Rejected documents of a run | `external_id` + reason |
 
-Статусы и типы хранятся строками (`Invoice`, `Signed`, `PartialSuccess`…), чтобы данные читались без справочников.
-Одновременную запись исключает advisory lock (см. п. 4), поэтому оптимистичные блокировки не нужны.
+Statuses and types are stored as strings (`Invoice`, `Signed`, `PartialSuccess`…) so the data is readable without
+lookup tables. Concurrent writes are excluded by the advisory lock (see section 4), so optimistic locking is not needed.
 
-**Демо-данные не входят в миграции.** Заказы `ORD-001`, `ORD-002`, `ORD-003` добавляет `DatabaseInitializer`
-только при `Persistence:SeedDemoData=true` (Development, Docker, тесты). Добавление идемпотентно: создаются только
-отсутствующие заказы. `ORD-404` специально отсутствует — на нём показан сценарий «несуществующий заказ».
+**Demo data is not part of the migrations.** The orders `ORD-001`, `ORD-002`, `ORD-003` are added by
+`DatabaseInitializer` only when `Persistence:SeedDemoData=true` (Development, Docker, tests). Seeding is idempotent:
+only missing orders are created. `ORD-404` is intentionally absent — it demonstrates the "non-existent order" scenario.
 
-Миграции лежат в `src/LedgerSync.Infrastructure/Persistence/Migrations` и применяются при старте
-(если `Persistence:ApplyMigrationsOnStartup=true`) или вручную:
+Migrations live in `src/LedgerSync.Infrastructure/Persistence/Migrations` and are applied on startup
+(when `Persistence:ApplyMigrationsOnStartup=true`) or manually:
 
 ```bash
 dotnet tool restore
@@ -161,90 +163,91 @@ dotnet tool restore
 dotnet ef database update -p src/LedgerSync.Infrastructure -s src/LedgerSync.Api
 ```
 
-SQL-скрипт для DBA:
+SQL script for a DBA:
 
 ```bash
 dotnet ef migrations script -p src/LedgerSync.Infrastructure -s src/LedgerSync.Api -o schema.sql
 ```
 
-## 4. Как устроена синхронизация
+## 4. How synchronization works
 
 `POST /api/sync/documents` → `SyncDocumentsCommandHandler.HandleAsync`
 ([SyncDocumentsCommandHandler.cs](src/LedgerSync.Application/Features/Sync/SyncDocuments/SyncDocumentsCommandHandler.cs)):
 
 ```mermaid
 flowchart TD
-    A[POST /api/sync/documents] --> B{Advisory lock<br/>свободен?}
-    B -- нет --> B1[409 Conflict]
-    B -- да --> C[Зависшие Running-запуски → Failed]
-    C --> D[SyncLog = Running<br/>сохранить]
-    D --> E[GET внешнего API<br/>retry + timeout + circuit breaker]
-    E -- недоступен / битый JSON --> F[SyncLog = Failed + ErrorMessage]
-    E -- ok --> G[Валидация каждого документа<br/>FluentValidation]
-    G --> H[Дедупликация внутри пачки]
-    H --> I[2 запроса: заказы + известные документы]
+    A[POST /api/sync/documents] --> B{Advisory lock<br/>free?}
+    B -- no --> B1[409 Conflict]
+    B -- yes --> C[Stuck Running runs → Failed]
+    C --> D[SyncLog = Running<br/>saved]
+    D --> E[GET external API<br/>retry + timeout + circuit breaker]
+    E -- unavailable / broken JSON --> F[SyncLog = Failed + ErrorMessage]
+    E -- ok --> G[Validate every document<br/>FluentValidation]
+    G --> H[Deduplicate within the batch]
+    H --> I[2 queries: orders + known documents]
     I --> J[Create / Update / Skip / Reject]
-    J --> K[SyncLog.Complete<br/>Success или PartialSuccess]
-    K --> L[(Один SaveChanges =<br/>одна транзакция)]
-    L -- ошибка БД --> M[Откат, SyncLog = Failed]
-    L -- ok --> N[Отправка строки в Google Sheets]
+    J --> K[SyncLog.Complete<br/>Success or PartialSuccess]
+    K --> L[(One SaveChanges =<br/>one transaction)]
+    L -- database error --> M[Rollback, SyncLog = Failed]
+    L -- ok --> N[Send row to Google Sheets]
     F --> N
     M --> N
-    N --> O[Статус доставки в SyncLog<br/>Sent / Failed]
-    O --> P[200 OK + результат]
+    N --> O[Delivery status in SyncLog<br/>Sent / Failed]
+    O --> P[200 OK + result]
 ```
 
-Правила обработки каждого документа:
+Rules for each document:
 
-| Ситуация | Действие | Счётчик |
+| Situation | Action | Counter |
 |---|---|---|
-| Новый `externalId` | создать | `DocumentsCreated` |
-| Известный, изменились `Status`, `Amount` или `ExternalUpdatedAt` | обновить (сумма обновляется вместе с валютой) | `DocumentsUpdated` |
-| Известный, но пришёл с **другим заказом или типом** | отклонить, данные не меняются | `DocumentsSkipped`, статус `PartialSuccess` |
-| Известный, данные не изменились | пропустить | `DocumentsSkipped` |
-| Пришла **более старая** версия (`ExternalUpdatedAt` меньше сохранённого) | пропустить, warning в лог | `DocumentsSkipped` |
-| Тот же `externalId` несколько раз в одном ответе | берётся самая свежая версия, остальные копии пропускаются | `DocumentsSkipped` |
-| Невалидный документ (нет полей, неизвестный статус/тип, отрицательная сумма, дата в будущем, нечитаемое значение) | отклонить, причина в `sync_log_errors` | `DocumentsSkipped`, статус `PartialSuccess` |
-| Несуществующий заказ | отклонить (см. п. 7) | `DocumentsSkipped`, статус `PartialSuccess` |
+| New `externalId` | create | `DocumentsCreated` |
+| Known, `Status`, `Amount` or `ExternalUpdatedAt` changed | update (the amount is updated together with the currency) | `DocumentsUpdated` |
+| Known, but arrived with **a different order or type** | reject, stored data is not changed | `DocumentsSkipped`, status `PartialSuccess` |
+| Known, data unchanged | skip | `DocumentsSkipped` |
+| An **older** version arrived (`ExternalUpdatedAt` earlier than the stored one) | skip, warning in the log | `DocumentsSkipped` |
+| The same `externalId` several times in one response | the latest version is used, the other copies are skipped | `DocumentsSkipped` |
+| Invalid document (missing fields, unknown status/type, negative amount, date in the future, unreadable value) | reject, reason in `sync_log_errors` | `DocumentsSkipped`, status `PartialSuccess` |
+| Non-existent order | reject (see section 7) | `DocumentsSkipped`, status `PartialSuccess` |
 
-Инвариант: `Created + Updated + Skipped == Received`. Это проверяет сам домен (`SyncLog.Complete`).
+Invariant: `Created + Updated + Skipped == Received`. The domain itself checks it (`SyncLog.Complete`).
 
-Итоговые статусы запуска:
+Final run statuses:
 
-| Статус | Когда |
+| Status | When |
 |---|---|
-| `Success` | все документы обработаны без отклонений |
-| `PartialSuccess` | часть документов отклонена (невалидные данные или неизвестный заказ), остальные сохранены |
-| `Failed` | источник недоступен, ответ не является JSON-массивом, любая другая ошибка обращения к источнику, ошибка сохранения в БД или запуск прерван падением процесса |
+| `Success` | all documents processed without rejections |
+| `PartialSuccess` | some documents were rejected (invalid data or unknown order), the rest were saved |
+| `Failed` | the source is unavailable, the response is not a JSON array, any other error while calling the source, a database save error, or the run was interrupted by a process crash |
 
-Пока запуск идёт, его запись имеет промежуточный статус `Running`. Он нужен, чтобы запуск был виден в журнале
-ещё до обращения к внешней системе, и всегда сменяется одним из трёх итоговых статусов из задания.
+While a run is in progress its record has the intermediate status `Running`. It makes the run visible in the
+journal before the external system is called, and it is always replaced by one of the three final statuses
+from the assignment.
 
-**Атомарность.** Все изменения документов вместе со счётчиками и ошибками запуска сохраняются одним
-`SaveChanges`, то есть одной транзакцией PostgreSQL. При любой ошибке на этом шаге в базу не попадает ничего,
-а запуск отдельно фиксируется как `Failed` с текстом ошибки. Частично применённой синхронизации не бывает.
+**Atomicity.** All document changes together with the run counters and errors are saved by one `SaveChanges`,
+that is, one PostgreSQL transaction. On any error at this step nothing reaches the database, and the run itself is
+recorded separately as `Failed` with the error text. A partially applied sync never happens.
 
-**Конкурентность.** Одновременно может идти только один запуск — на всех экземплярах приложения. Это
-обеспечивает session-level advisory lock PostgreSQL. Если процесс упадёт, PostgreSQL сам снимет блокировку
-вместе с соединением. Параллельный запрос получает `409 Conflict`.
+**Concurrency.** Only one run can be in progress at a time — across all application instances. This is ensured by a
+session-level PostgreSQL advisory lock. If the process crashes, PostgreSQL releases the lock together with the
+connection. A parallel request gets `409 Conflict`.
 
-## 5. Как решена проблема дублей
+## 5. How duplicates are prevented
 
-Защита в три слоя:
+Three layers of protection:
 
-1. **Уровень БД** — уникальный индекс `ix_external_documents_external_id`. Даже при ошибке в коде PostgreSQL
-   не даст сохранить второй документ с тем же `ExternalId`. Нарушение превращается в `PersistenceConflictException`
-   и откатывает весь запуск (проверено интеграционным тестом).
-2. **Уровень приложения** — перед записью одним запросом загружаются все уже известные документы пачки
-   (`WHERE external_id = ANY(...)`). Известный документ обновляется или пропускается, но никогда не вставляется повторно.
-3. **Внутри одного ответа** — если внешняя система прислала один `externalId` несколько раз, остаётся только
-   последняя версия.
+1. **Database level** — the unique index `ix_external_documents_external_id`. Even if the code has a bug,
+   PostgreSQL will not store a second document with the same `ExternalId`. The violation becomes a
+   `PersistenceConflictException` and rolls back the whole run (covered by an integration test).
+2. **Application level** — before writing, all already known documents of the batch are loaded in one query
+   (`WHERE external_id = ANY(...)`). A known document is updated or skipped, but never inserted again.
+3. **Within one response** — if the external system sends the same `externalId` several times, only the latest
+   version is kept.
 
-Плюс advisory lock исключает гонку двух параллельных синхронизаций за одни и те же документы.
+On top of that, the advisory lock rules out a race between two parallel syncs over the same documents.
 
 ## 6. Google Sheets interface
 
-Контракт ([IGoogleSheetLogger.cs](src/LedgerSync.Application/Abstractions/GoogleSheets/IGoogleSheetLogger.cs)) — как в задании:
+The contract ([IGoogleSheetLogger.cs](src/LedgerSync.Application/Abstractions/GoogleSheets/IGoogleSheetLogger.cs)) is the one from the assignment:
 
 ```csharp
 public interface IGoogleSheetLogger
@@ -253,236 +256,239 @@ public interface IGoogleSheetLogger
 }
 ```
 
-На каждый запуск в таблицу пишется одна строка: `RunId, StartedAt, FinishedAt, Status, DocumentsReceived,
+Each run writes one row to the sheet: `RunId, StartedAt, FinishedAt, Status, DocumentsReceived,
 DocumentsCreated, DocumentsUpdated, DocumentsSkipped, ErrorMessage`.
 
-Выбран **вариант C из задания: mock-реализация** `FileGoogleSheetLogger`. Она пишет строки в CSV-файл
-с теми же колонками, что и лист Google. Задание допускает mock-клиент при условии, что в коде выделен интерфейс,
-который можно заменить реальной интеграцией; это условие выполнено. Вся логика вокруг отправки (когда отправлять,
-что делать при отказе, как переотправить) не зависит от реализации и одинаково работает с mock и с настоящим Google.
+**Option C from the assignment was chosen: a mock implementation**, `FileGoogleSheetLogger`. It writes rows to a CSV
+file with the same columns as the Google sheet. The assignment allows a mock client as long as the code has a
+dedicated interface that can be replaced with a real integration; this condition is met. All the logic around
+sending (when to send, what to do on failure, how to resend) does not depend on the implementation and works the
+same with the mock and with real Google.
 
-Свойства, важные для надёжности:
+Properties that matter for reliability:
 
-- **Отправка идёт только после коммита документов** и не может их откатить. Любая ошибка логгера перехватывается,
-  в `sync_logs` сохраняется `google_sheet_status = Failed` и текст ошибки.
-- **Повторная отправка любого запуска**: последнего (`POST /api/sync/logs/latest/send-to-google`, как в задании)
-  или конкретного (`POST /api/sync/logs/{runId}/send-to-google`). Так можно доставить и запуск, который упал
-  в Google раньше последнего.
-- **Идемпотентность.** Строка ищется по `RunId` и обновляется, поэтому повторная отправка не создаёт дубль.
-- CSV пишется во временный файл и атомарно подменяется — сбой не оставит половину файла.
+- **Sending happens only after the documents are committed** and cannot roll them back. Any logger error is caught,
+  and `google_sheet_status = Failed` with the error text is saved in `sync_logs`.
+- **Any run can be resent**: the latest one (`POST /api/sync/logs/latest/send-to-google`, as in the assignment)
+  or a specific one (`POST /api/sync/logs/{runId}/send-to-google`). This way a run that failed to reach Google
+  before the latest one can still be delivered.
+- **Idempotency.** The row is looked up by `RunId` and updated, so a resend does not create a duplicate.
+- The CSV is written to a temporary file and swapped atomically — a crash never leaves a half-written file.
 
-### Как проверить
+### How to check
 
-- Локально: файл `src/LedgerSync.Api/google-sheets-mock/sync-log.csv`.
-- В Docker:
+- Locally: the file `src/LedgerSync.Api/google-sheets-mock/sync-log.csv`.
+- In Docker:
 
   ```bash
   docker compose exec api cat google-sheets-mock/sync-log.csv
   ```
 
-- Отказ Google и повторная отправка проверены автотестами: в них логгер подменяется на всегда падающий
-  (`Handle_GoogleSheetsUnavailable_...`, `GoogleSheetsDown_DocumentsStaySavedAndRunCanBeResent`).
+- Google failure and resending are covered by automated tests, where the logger is replaced with one that always
+  fails (`Handle_GoogleSheetsUnavailable_...`, `GoogleSheetsDown_DocumentsStaySavedAndRunCanBeResent`).
 
-### Как заменить mock на реальную Google-таблицу
+### How to replace the mock with a real Google sheet
 
-1. Добавить реализацию `IGoogleSheetLogger` в `Infrastructure/GoogleSheets`, например `SheetsApiGoogleSheetLogger`
-   на пакете `Google.Apis.Sheets.v4` с Service Account (вариант A) или HTTP POST в Apps Script Web App (вариант B).
-   Строку стоит искать по `RunId` и обновлять, а не добавлять, чтобы повторы оставались идемпотентными.
-2. Зарегистрировать её вместо `FileGoogleSheetLogger` в `InfrastructureServiceCollectionExtensions.AddGoogleSheets`.
-3. Секреты (JSON ключа Service Account или URL Web App) передавать через переменные окружения или секрет-хранилище,
-   не через git.
+1. Add an `IGoogleSheetLogger` implementation in `Infrastructure/GoogleSheets`, for example `SheetsApiGoogleSheetLogger`
+   on the `Google.Apis.Sheets.v4` package with a Service Account (option A) or an HTTP POST to an Apps Script Web App
+   (option B). The row should be looked up by `RunId` and updated rather than appended, so retries stay idempotent.
+2. Register it instead of `FileGoogleSheetLogger` in `InfrastructureServiceCollectionExtensions.AddGoogleSheets`.
+3. Pass secrets (the Service Account key JSON or the Web App URL) through environment variables or a secret store,
+   never through git.
 
-Остальной код — обработчики, повторная отправка, журнал — не меняется.
+The rest of the code — handlers, resending, the journal — stays the same.
 
-## 7. Документы по несуществующим заказам
+## 7. Documents for non-existent orders
 
-**Выбранное поведение: документ отклоняется и записывается в журнал ошибок запуска.**
+**Chosen behavior: the document is rejected and recorded in the run's error log.**
 
-- Документ **не сохраняется** в `external_documents`, заказ автоматически **не создаётся**.
-- В `sync_log_errors` пишется `external_id` и причина `Order 'ORD-404' does not exist.`, в лог — warning (EventId 1101).
-- Документ учитывается в `DocumentsSkipped`, запуск получает статус `PartialSuccess`. Остальные документы пачки сохраняются.
-- Ошибки видны в `GET /api/sync/logs` (поле `errors`).
+- The document is **not saved** to `external_documents`, and the order is **not created** automatically.
+- `sync_log_errors` gets the `external_id` and the reason `Order 'ORD-404' does not exist.`; the log gets a warning (EventId 1101).
+- The document counts towards `DocumentsSkipped`, and the run gets the status `PartialSuccess`. The other documents of the batch are saved.
+- The errors are visible in `GET /api/sync/logs` (the `errors` field).
 
-Почему так: создавать заказ из финансового документа опасно — у документа нет данных клиента, и появились бы
-«пустые» заказы. Orphan-документы без связи с заказом нарушили бы FK и усложнили бы все запросы. Отклонение
-с подробным журналом сохраняет целостность данных и не теряет информацию. Когда заказ появится, документ
-будет создан при следующей синхронизации, ведь внешняя система отдаёт полный список.
+Why: creating an order from a financial document is risky — the document has no client data, so "empty" orders
+would appear. Orphan documents without an order would break the FK and complicate every query. Rejecting with a
+detailed log keeps the data consistent and loses no information. Once the order appears, the document is created on
+the next sync, since the external system returns the full list.
 
-## 8. Ограничения текущего решения
+## 8. Limitations of the current solution
 
-- **Полная синхронизация каждый раз.** Внешний API отдаёт весь список, без инкрементальной выгрузки
-  (`updatedSince`) и пагинации.
-- **Одна транзакция на запуск.** Это даёт атомарность, но на очень больших пачках транзакция будет долгой.
-- **Запуск только вручную** через API, без планировщика.
-- **Google отправляется синхронно после коммита.** Если процесс упадёт между коммитом и отправкой, строка останется
-  в статусе `Pending`, и её нужно переотправить вручную (`POST /api/sync/logs/{runId}/send-to-google`).
-  Автоматического повтора (outbox) нет.
-- **Зависший запуск** (процесс упал во время синхронизации) помечается `Failed` только при следующем запуске.
-- **Переходы статусов не проверяются.** Источник истины — внешняя система, поэтому, например, `Signed → Created`
-  с более новой датой будет принят. Защита есть только от устаревших версий (более старая `ExternalUpdatedAt`).
-- **`DocumentsSkipped` включает и отклонённые документы** (так предписывает модель `SyncLog` из задания).
-  Отклонённые видны отдельно в `errors` и по статусу `PartialSuccess`.
-- Номер документа (`DocumentNumber`) после создания не обновляется: по заданию отслеживаются `Status`, `Amount`
-  (вместе с валютой) и `ExternalUpdatedAt`.
-- Нет аутентификации и авторизации (по заданию не требуются).
-- Mock внешней системы работает в том же процессе (вариант 1 из задания) и включается только флагом.
-- Google Sheets представлен mock-реализацией (вариант C, разрешён заданием); реальная таблица подключается
-  отдельной реализацией `IGoogleSheetLogger` (см. п. 6).
+- **Full sync every time.** The external API returns the whole list, without incremental export (`updatedSince`)
+  and without pagination.
+- **One transaction per run.** This gives atomicity, but on very large batches the transaction will be long.
+- **Runs are started manually** through the API, there is no scheduler.
+- **Google is called synchronously after the commit.** If the process crashes between the commit and sending,
+  the row stays `Pending` and has to be resent manually (`POST /api/sync/logs/{runId}/send-to-google`).
+  There is no automatic retry (outbox).
+- **A stuck run** (the process crashed during a sync) is marked `Failed` only on the next run.
+- **Status transitions are not checked.** The external system is the source of truth, so, for example,
+  `Signed → Created` with a newer date is accepted. Only outdated versions (an older `ExternalUpdatedAt`) are rejected.
+- **`DocumentsSkipped` includes rejected documents too** (as prescribed by the `SyncLog` model in the assignment).
+  Rejected documents are visible separately in `errors` and through the `PartialSuccess` status.
+- The document number (`DocumentNumber`) is not updated after creation: per the assignment, `Status`, `Amount`
+  (together with the currency) and `ExternalUpdatedAt` are tracked.
+- No authentication or authorization (not required by the assignment).
+- The external system mock runs in the same process (option 1 from the assignment) and is enabled only by a flag.
+- Google Sheets is represented by a mock implementation (option C, allowed by the assignment); a real sheet is
+  plugged in with a separate `IGoogleSheetLogger` implementation (see section 6).
 
-## 9. Что улучшить перед production
+## 9. What to improve before production
 
-1. **Transactional outbox** для Google Sheets: событие пишется в той же транзакции, фоновый воркер доставляет
-   с retry. Так ни одна строка не потеряется даже при падении процесса.
-2. **Планировщик и инкрементальная синхронизация**: фоновый запуск по расписанию, курсор `updatedSince`,
-   пагинация, обработка пачками.
-3. **Наблюдаемость**: OpenTelemetry (traces + metrics: длительность, счётчики, доля `Failed`), алерты на
-   `Failed` / `PartialSuccess` и на рост `google_sheet_status = Failed`.
-4. **Реальная Google-таблица** вместо mock (Sheets API + Service Account), секреты в Vault / Key Vault.
-5. **Безопасность**: аутентификация (JWT / API key), rate limiting.
-6. **Миграции через migration bundle в CI/CD**, а не при старте приложения.
-7. **CI**: сборка, тесты (включая Testcontainers), анализаторы, проверка уязвимых пакетов.
-8. Retention-политика для `sync_logs` и `sync_log_errors`, индекс по статусу для мониторинга.
-9. Отдельный сервис или контракт для внешней системы (сейчас mock в процессе).
+1. **Transactional outbox** for Google Sheets: the event is written in the same transaction and a background worker
+   delivers it with retries. No row is lost even if the process crashes.
+2. **Scheduler and incremental sync**: scheduled background runs, an `updatedSince` cursor, pagination,
+   processing in chunks.
+3. **Observability**: OpenTelemetry (traces + metrics: duration, counters, share of `Failed`), alerts on
+   `Failed` / `PartialSuccess` and on growing `google_sheet_status = Failed`.
+4. **A real Google sheet** instead of the mock (Sheets API + Service Account), secrets in Vault / Key Vault.
+5. **Security**: authentication (JWT / API key), rate limiting.
+6. **Migrations through a migration bundle in CI/CD** instead of on application startup.
+7. **CI**: build, tests (including Testcontainers), analyzers, vulnerable package checks.
+8. A retention policy for `sync_logs` and `sync_log_errors`, an index on status for monitoring.
+9. A separate service or contract for the external system (currently an in-process mock).
 
-## 10. Использование AI-инструментов
+## 10. Use of AI tools
 
-Использовался **Claude Code** (Anthropic):
+**Claude Code** (Anthropic) was used for:
 
-- разбор тестового задания и составление плана по версиям;
-- генерация каркаса решения, кода слоёв, EF-конфигураций, тестов и черновика документации по моим требованиям
-  (Clean Architecture, Enumeration-классы вместо enum, отдельные extensions для builder и app, акцент на надёжность);
-- проверка сценариев: запуск API на реальном PostgreSQL, прогон тестов и docker-compose.
+- analyzing the assignment and planning the work in versions;
+- generating the solution skeleton, the code of the layers, EF configurations, tests and a draft of the
+  documentation according to my requirements (Clean Architecture, Enumeration classes instead of enums,
+  separate extensions for the builder and the app, focus on reliability);
+- checking the scenarios: running the API against real PostgreSQL, running the tests and docker-compose.
 
-Архитектурные решения, код и тесты я проверил и могу объяснить: почему одна транзакция на запуск,
-зачем advisory lock, как работает upsert по `RunId` и т. д.
+I have reviewed the architectural decisions, the code and the tests and can explain them: why one transaction per
+run, why the advisory lock, how the upsert by `RunId` works, and so on.
 
 ---
 
-## Надёжность, точность данных и безопасность: ключевые решения
+## Reliability, data accuracy and security: key decisions
 
-Сводка главных решений в одном месте. Для каждого пункта в [docs/reliability.md](docs/reliability.md) указаны
-место в коде и тест, который это проверяет.
+The main decisions in one place. For each item, [docs/reliability.md](docs/reliability.md) points to the code and
+the test that checks it.
 
-### Надёжность: сбой не теряет и не портит данные
+### Reliability: a failure neither loses nor corrupts data
 
-| Решение | Что это даёт |
+| Decision | What it gives |
 |---|---|
-| **Одна транзакция на запуск** | Документы, счётчики и ошибки запуска сохраняются одним `SaveChanges`. При ошибке в базу не попадает ничего, частично применённой синхронизации не бывает |
-| **Запуск записывается до начала работы** | Запись `Running` создаётся раньше обращения к внешней системе, и любой исход завершает её как `Success`, `PartialSuccess` или `Failed` с причиной. Запусков без следа в журнале нет |
-| **Один запуск одновременно** | Advisory lock PostgreSQL действует на все экземпляры приложения; параллельный запрос получает `409`. Гонки за одни и те же документы нет |
-| **Восстановление после падения процесса** | PostgreSQL сам снимает блокировку при обрыве соединения, а следующий запуск помечает зависшую запись как `Failed` |
-| **Запуск не привязан к HTTP-запросу** | Обрыв соединения клиентом не оставляет синхронизацию наполовину выполненной |
-| **Устойчивые вызовы внешней системы** | Таймауты, повторы с нарастающей паузой и circuit breaker. Когда повторы исчерпаны, запуск завершается как `Failed`, документы не трогаются |
-| **Плохой документ не ломает пачку** | Каждый документ разбирается и проверяется отдельно: плохой отклоняется с причиной, остальные сохраняются |
-| **Google изолирован от данных** | Отправка идёт только после коммита документов. Отказ записывается в журнал и не откатывает данные; любой запуск можно доотправить по `runId`, повтор не создаёт дубль строки |
-| **Ошибка конфигурации видна сразу** | Без адреса внешней системы или строки подключения приложение не стартует и называет, чего не хватает |
+| **One transaction per run** | Documents, counters and run errors are saved by one `SaveChanges`. On an error nothing reaches the database; a partially applied sync never happens |
+| **The run is recorded before any work** | The `Running` record is created before the external system is called, and any outcome finishes it as `Success`, `PartialSuccess` or `Failed` with a reason. No run is left without a trace in the journal |
+| **One run at a time** | The PostgreSQL advisory lock covers all application instances; a parallel request gets `409`. There is no race over the same documents |
+| **Recovery after a process crash** | PostgreSQL releases the lock when the connection drops, and the next run marks the stuck record as `Failed` |
+| **The run is not tied to the HTTP request** | A client disconnect does not leave a sync half done |
+| **Resilient calls to the external system** | Timeouts, retries with growing delays and a circuit breaker. Once the retries are exhausted the run finishes as `Failed` and documents are not touched |
+| **A bad document does not break the batch** | Each document is parsed and validated on its own: a bad one is rejected with a reason, the rest are saved |
+| **Google is isolated from the data** | Sending happens only after the documents are committed. A failure is recorded in the journal and does not roll back data; any run can be resent by `runId`, and a resend does not duplicate the row |
+| **A configuration error shows up immediately** | Without the external system address or the connection string the application refuses to start and says what is missing |
 
-### Точность данных: в базе только корректные и актуальные значения
+### Data accuracy: only correct and current values reach the database
 
-| Решение | Что это даёт |
+| Decision | What it gives |
 |---|---|
-| **Дубли исключены в три слоя** | Уникальный индекс в БД, поиск известных документов перед записью, дедупликация внутри одного ответа |
-| **Деньги без потери точности** | `decimal` в коде и `numeric(18,2)` в БД, без чисел с плавающей точкой. Отрицательная сумма или сумма с более чем двумя знаками после запятой отклоняется: валидатором, инвариантом сущности и `CHECK` в базе |
-| **Сумма и валюта меняются только вместе** | Нельзя получить новую сумму со старой валютой |
-| **Время только в UTC** | Все даты приводятся к UTC на входе, хранятся в `timestamptz` и отдаются в формате `2026-06-20T10:00:00Z`. Одно и то же время в разных часовых поясах не считается изменением |
-| **Старая версия не затирает новую** | Документ с более ранней `ExternalUpdatedAt`, чем сохранённая, пропускается |
-| **Дата из будущего отклоняется** | Иначе такая дата навсегда заблокировала бы следующие обновления документа. Допуск на расхождение часов — 5 минут |
-| **Документ не меняет заказ и тип** | Версия известного документа с другим заказом или типом отклоняется, сохранённые данные не меняются |
-| **Только известные статусы и типы** | Неизвестное значение отклоняется, а не подменяется значением по умолчанию |
-| **Несуществующий заказ не создаётся** | Документ отклоняется с причиной; «пустых» заказов из финансовых документов не появляется |
-| **Счётчики всегда сходятся** | `Created + Updated + Skipped == Received` проверяет сама сущность запуска |
+| **Duplicates are excluded in three layers** | A unique index in the database, a lookup of known documents before writing, deduplication within one response |
+| **Money without loss of precision** | `decimal` in code and `numeric(18,2)` in the database, no floating point. A negative amount or one with more than two decimal places is rejected: by the validator, by the entity invariant and by a `CHECK` in the database |
+| **Amount and currency change only together** | A new amount can never end up with the old currency |
+| **UTC time only** | All dates are converted to UTC on input, stored as `timestamptz` and returned as `2026-06-20T10:00:00Z`. The same moment in different time zones is not treated as a change |
+| **An old version does not overwrite a new one** | A document with an earlier `ExternalUpdatedAt` than the stored one is skipped |
+| **A date in the future is rejected** | Otherwise such a date would block all further updates of the document forever. The allowed clock skew is 5 minutes |
+| **A document does not change its order or type** | A version of a known document with a different order or type is rejected, stored data is not changed |
+| **Only known statuses and types** | An unknown value is rejected rather than replaced with a default |
+| **A non-existent order is not created** | The document is rejected with a reason; no "empty" orders appear from financial documents |
+| **Counters always add up** | `Created + Updated + Skipped == Received` is checked by the run entity itself |
 
-Сознательное ограничение: переходы статусов не проверяются. Источник истины — внешняя система, поэтому её
-статус принимается как есть (см. п. 8).
+A deliberate limitation: status transitions are not checked. The external system is the source of truth, so its
+status is accepted as is (see section 8).
 
-### Безопасность
+### Security
 
-| Решение | Что это даёт |
+| Decision | What it gives |
 |---|---|
-| **Секретов в репозитории нет** | Пароль БД передаётся через переменные окружения или `.env`, который в `.gitignore`. В репозитории есть только значение `postgres` для локального запуска |
-| **Только параметризованные запросы** | Все запросы идут через EF Core; единственный ручной SQL (advisory lock) использует параметр. SQL-инъекция невозможна |
-| **Входные данные считаются недоверенными** | Ответ внешней системы и параметры запросов API проверяются до обработки, длины строк ограничены |
-| **Ошибки без внутренних деталей** | Ответы в формате RFC 7807: известные ошибки с кодами 400/404/409, остальные — `500` без деталей, с `traceId` для поиска в логах |
-| **Demo-функции выключены по умолчанию** | Mock внешней системы и демо-заказы включаются только флагами; в production их нет |
-| **Контейнер работает не от root** | В `Dockerfile` задан непривилегированный пользователь |
+| **No secrets in the repository** | The database password is passed through environment variables or `.env`, which is in `.gitignore`. The repository contains only the `postgres` value for local runs |
+| **Parameterized queries only** | All queries go through EF Core; the only hand-written SQL (the advisory lock) uses a parameter. SQL injection is not possible |
+| **Input is treated as untrusted** | The external system response and API query parameters are validated before processing, string lengths are limited |
+| **Errors without internal details** | Responses follow RFC 7807: known errors get 400/404/409, everything else is a `500` without details but with a `traceId` to find it in the logs |
+| **Demo features are off by default** | The external system mock and the demo orders are enabled only by flags; they are not present in production |
+| **The container does not run as root** | The `Dockerfile` sets a non-privileged user |
 
-Аутентификации и авторизации нет: задание их не требует. Это указано в ограничениях (п. 8) и в плане доработок (п. 9).
+There is no authentication or authorization: the assignment does not require it. This is listed in the
+limitations (section 8) and in the improvement plan (section 9).
 
-## Архитектура
+## Architecture
 
-Clean Architecture, зависимости направлены внутрь:
+Clean Architecture, dependencies point inwards:
 
 ```
 Api ──► Infrastructure ──► Application ──► Domain
  └───────────────────────► Application
 ```
 
-| Проект | Ответственность |
+| Project | Responsibility |
 |---|---|
-| `LedgerSync.Domain` | Сущности (`Order`, `ExternalDocument`, `SyncLog`, `SyncLogError`), Enumeration-классы, инварианты. Без внешних зависимостей |
-| `LedgerSync.Application` | Команды и запросы с обработчиками (`Features/*`), порты (интерфейсы), DTO, валидаторы, мапперы, структурированные log-события |
-| `LedgerSync.Infrastructure` | EF Core + PostgreSQL, unit of work с репозиториями, advisory lock, HTTP-клиент внешнего API, mock-логгер Google Sheets |
-| `LedgerSync.Api` | Контроллеры, глобальный exception handler, OpenAPI, composition root; mock внешней системы в отдельной папке `MockExternalApi`, подключается только флагом |
+| `LedgerSync.Domain` | Entities (`Order`, `ExternalDocument`, `SyncLog`, `SyncLogError`), Enumeration classes, invariants. No external dependencies |
+| `LedgerSync.Application` | Commands and queries with their handlers (`Features/*`), ports (interfaces), DTOs, validators, mappers, structured log events |
+| `LedgerSync.Infrastructure` | EF Core + PostgreSQL, unit of work with repositories, advisory lock, external API HTTP client, Google Sheets mock logger |
+| `LedgerSync.Api` | Controllers, global exception handler, OpenAPI, composition root; the external system mock lives in a separate `MockExternalApi` folder and is enabled only by a flag |
 
 ### CQRS
 
-Команды меняют состояние, запросы только читают. У каждой операции свой обработчик:
+Commands change state, queries only read. Each operation has its own handler:
 
-| Тип | Операция | Endpoint |
+| Type | Operation | Endpoint |
 |---|---|---|
 | Command | `SyncDocumentsCommand` | `POST /api/sync/documents` |
 | Command | `ResendSyncLogCommand` | `POST /api/sync/logs/latest/send-to-google`, `POST /api/sync/logs/{runId}/send-to-google` |
 | Query | `GetSyncLogsQuery` | `GET /api/sync/logs` |
 | Query | `GetOrderDocumentsQuery` | `GET /api/orders/{orderNumber}/documents` |
 
-Реализация намеренно лёгкая, без enterprise-обвязки:
+The implementation is deliberately lightweight, without enterprise plumbing:
 
-- **Без MediatR и диспетчера.** Интерфейсы `ICommand`/`IQuery` и `ICommandHandler`/`IQueryHandler`
-  ([Abstractions/Messaging](src/LedgerSync.Application/Abstractions/Messaging)) занимают несколько строк. Контроллер
-  получает нужный обработчик через `[FromServices]`, поэтому путь вызова виден без «магии». MediatR с v13
-  распространяется по коммерческой лицензии, а для четырёх операций посредник ничего не даёт.
-- **Без pipeline behaviors.** Валидация — один явный вызов `ValidateAndThrowAsync` в начале обработчика.
-- **Одна модель данных** для чтения и записи, без отдельных read-моделей и баз.
-- **Папка на операцию, один тип на файл**: запрос, валидатор и обработчик лежат рядом
-  (`Features/SyncLogs/GetSyncLogs/`), поэтому всё про одну операцию находится в одном месте.
+- **No MediatR and no dispatcher.** The `ICommand`/`IQuery` and `ICommandHandler`/`IQueryHandler` interfaces
+  ([Abstractions/Messaging](src/LedgerSync.Application/Abstractions/Messaging)) take a few lines. A controller
+  receives the handler it needs through `[FromServices]`, so the call path is visible without any "magic".
+  MediatR has been commercially licensed since v13, and for four operations a mediator adds nothing.
+- **No pipeline behaviors.** Validation is one explicit `ValidateAndThrowAsync` call at the start of the handler.
+- **One data model** for reads and writes, no separate read models or databases.
+- **A folder per operation, one type per file**: the query, its validator and its handler sit together
+  (`Features/SyncLogs/GetSyncLogs/`), so everything about one operation is in one place.
 
-Что ещё упрощено сознательно:
+Other deliberate simplifications:
 
-- нет навигационных свойств между `Order` и `ExternalDocument`: связи хватает внешнего ключа `OrderId`;
-- нет оптимистичных блокировок (`xmin`): единственного писателя уже гарантирует advisory lock;
-- нет demo-режимов в боевом коде: отказ Google имитируется только в тестах, mock-API и демо-заказы
-  включаются только флагами конфигурации;
-- нет health-check endpoint'ов: их некому опрашивать (нет оркестратора и балансировщика), а готовность базы при
-  старте обеспечивает healthcheck PostgreSQL в compose: API запускается только после него. Добавляются одной
-  строкой при деплое в Kubernetes;
-- нет настроек, которые никто не меняет: таймауты HTTP и команд БД, лимит размера ответа, начальный сценарий mock —
-  работают стандартные значения. OpenAPI и Scalar UI доступны всегда: контракт API не секретен.
+- no navigation properties between `Order` and `ExternalDocument`: the `OrderId` foreign key is enough;
+- no optimistic locking (`xmin`): the advisory lock already guarantees a single writer;
+- no demo modes in production code: a Google failure is simulated only in tests, the mock API and the demo orders
+  are enabled only by configuration flags;
+- no health-check endpoints: nothing polls them (there is no orchestrator or load balancer), and database
+  readiness on startup is ensured by the PostgreSQL healthcheck in compose — the API starts only after it.
+  They take one line to add when deploying to Kubernetes;
+- no settings nobody changes: HTTP and database command timeouts, the response size limit, the initial mock
+  scenario — the defaults apply. OpenAPI and Scalar UI are always available: the API contract is not a secret.
 
 ### Unit of Work
 
-`IUnitOfWork` — единственная зависимость обработчиков от слоя хранения. Он отдаёт репозитории
-(`Orders`, `Documents`, `SyncLogs`) поверх одного `DbContext`, и `SaveChangesAsync` фиксирует изменения всех
-репозиториев одной транзакцией. Репозитории отдельно в DI не регистрируются.
+`IUnitOfWork` is the handlers' only dependency on the persistence layer. It exposes the repositories
+(`Orders`, `Documents`, `SyncLogs`) over a single `DbContext`, and `SaveChangesAsync` commits the changes of all
+repositories in one transaction. The repositories are not registered in DI separately.
 
-### Настройка хоста
+### Host setup
 
-Настройка хоста вынесена в extensions: [WebApplicationBuilderExtensions](src/LedgerSync.Api/Extensions/WebApplicationBuilderExtensions.cs)
-(`AddLedgerSyncServices`) и [WebApplicationExtensions](src/LedgerSync.Api/Extensions/WebApplicationExtensions.cs)
-(`InitializeDatabaseAsync`, `UseLedgerSyncPipeline`), поэтому `Program.cs` занимает несколько строк.
+The host setup lives in extensions: [WebApplicationBuilderExtensions](src/LedgerSync.Api/Extensions/WebApplicationBuilderExtensions.cs)
+(`AddLedgerSyncServices`) and [WebApplicationExtensions](src/LedgerSync.Api/Extensions/WebApplicationExtensions.cs)
+(`InitializeDatabaseAsync`, `UseLedgerSyncPipeline`), so `Program.cs` is only a few lines long.
 
 ## API
 
-| Метод | Путь | Ответы |
+| Method | Path | Responses |
 |---|---|---|
-| `POST` | `/api/sync/documents` | `200` результат запуска (в т. ч. `Failed` — это записанный исход), `409` если уже идёт другой запуск |
-| `GET` | `/api/orders/{orderNumber}/documents` | `200`, `400` невалидный номер, `404` заказ не найден |
-| `GET` | `/api/sync/logs?take=20` | `200` последние запуски с ошибками по документам, `400` если `take` вне 1..100 |
-| `POST` | `/api/sync/logs/latest/send-to-google` | `200` статус доставки, `404` запусков ещё не было, `409` последний запуск ещё идёт |
-| `POST` | `/api/sync/logs/{runId}/send-to-google` | `200` статус доставки, `404` запуск не найден, `409` запуск ещё идёт |
+| `POST` | `/api/sync/documents` | `200` run result (including `Failed` — a recorded outcome), `409` if another run is in progress |
+| `GET` | `/api/orders/{orderNumber}/documents` | `200`, `400` invalid number, `404` order not found |
+| `GET` | `/api/sync/logs?take=20` | `200` latest runs with per-document errors, `400` if `take` is outside 1..100 |
+| `POST` | `/api/sync/logs/latest/send-to-google` | `200` delivery status, `404` no runs yet, `409` the latest run is still in progress |
+| `POST` | `/api/sync/logs/{runId}/send-to-google` | `200` delivery status, `404` run not found, `409` the run is still in progress |
 
-Даты в ответах — UTC в формате из задания: `"2026-06-20T10:00:00Z"`.
+Dates in responses are UTC in the format from the assignment: `"2026-06-20T10:00:00Z"`.
 
-Пример ответа синхронизации:
+Example sync response:
 
 ```json
 {
@@ -497,7 +503,7 @@ Api ──► Infrastructure ──► Application ──► Domain
 }
 ```
 
-Все ошибки возвращаются в формате RFC 7807 (`application/problem+json`) с `traceId` для поиска в логах:
+All errors are returned as RFC 7807 (`application/problem+json`) with a `traceId` to find them in the logs:
 
 ```json
 {
@@ -509,66 +515,66 @@ Api ──► Infrastructure ──► Application ──► Domain
 }
 ```
 
-## Mock внешней системы
+## External system mock
 
-Реализован вариант 1 из задания: endpoint внутри того же приложения. Код изолирован в папке
-`src/LedgerSync.Api/MockExternalApi` и подключается только при `MockExternalApi:Enabled=true` (Development, Docker,
-тесты). В production его маршрутов нет совсем, это проверено тестом. Сервис синхронизации ходит к mock
-**по настоящему HTTP** через тот же клиент с retry и таймаутами, что и к реальной системе, поэтому замена на
-реальную систему — это только смена `ExternalApi:BaseUrl`. Сценарий переключается без перезапуска:
+Option 1 from the assignment is implemented: an endpoint inside the same application. The code is isolated in the
+`src/LedgerSync.Api/MockExternalApi` folder and is enabled only with `MockExternalApi:Enabled=true` (Development,
+Docker, tests). In production its routes do not exist at all, which is covered by a test. The sync service calls the
+mock **over real HTTP** through the same client with retries and timeouts as for a real system, so switching to a
+real system is only a change of `ExternalApi:BaseUrl`. The scenario is switched without a restart:
 
 ```bash
 curl -X PUT http://localhost:8080/mock/external/scenario/Updated
 ```
 
-| Сценарий | Что возвращает | Ожидаемый результат синхронизации |
+| Scenario | What it returns | Expected sync result |
 |---|---|---|
-| `Baseline` | 4 валидных документа | 1-й запуск: created 4; повторный: skipped 4 |
-| `Updated` | 2 документа сменили статус/сумму, 1 новый | created 1, updated 2, skipped 2 |
-| `Mixed` | заказ `ORD-404`, невалидные поля, нечитаемая сумма, дубль внутри ответа | `PartialSuccess`, ошибки в `errors` |
-| `Stale` | старая версия известного документа | skipped 1, данные не откатываются |
-| `Malformed` | битый JSON | `Failed`: `External source returned malformed JSON.` |
+| `Baseline` | 4 valid documents | 1st run: created 4; repeated run: skipped 4 |
+| `Updated` | 2 documents with a changed status/amount, 1 new | created 1, updated 2, skipped 2 |
+| `Mixed` | order `ORD-404`, invalid fields, an unreadable amount, a duplicate within the response | `PartialSuccess`, errors in `errors` |
+| `Stale` | an older version of a known document | skipped 1, data is not rolled back |
+| `Malformed` | broken JSON | `Failed`: `External source returned malformed JSON.` |
 | `Unavailable` | HTTP 503 | retry → `Failed`: `External source returned HTTP 503 ...` |
 
-Данные сценариев: `src/LedgerSync.Api/MockExternalApi/Data/*.json`.
+Scenario data: `src/LedgerSync.Api/MockExternalApi/Data/*.json`.
 
-Соответствие сценариям из раздела 4 задания:
+Mapping to the scenarios from section 4 of the assignment:
 
-| Сценарий из задания | Сценарий mock |
+| Assignment scenario | Mock scenario |
 |---|---|
-| Новый документ | `Baseline`, первый запуск |
-| Повторный документ | `Baseline`, повторный запуск |
-| Изменение статуса | `Updated` |
-| Некорректные данные | `Mixed` (плохие поля у отдельных документов), `Malformed` (ответ целиком не разбирается) |
-| Недоступность источника | `Unavailable` |
+| New document | `Baseline`, first run |
+| Repeated document | `Baseline`, repeated run |
+| Status change | `Updated` |
+| Invalid data | `Mixed` (bad fields in individual documents), `Malformed` (the whole response cannot be parsed) |
+| Source unavailable | `Unavailable` |
 
-`Stale` — дополнительный сценарий сверх задания: доставка версий не по порядку.
+`Stale` is an extra scenario beyond the assignment: versions delivered out of order.
 
-## Конфигурация
+## Configuration
 
-| Ключ | По умолчанию | Описание |
+| Key | Default | Description |
 |---|---|---|
-| `ConnectionStrings:LedgerSync` | — | Строка подключения PostgreSQL (обязательна) |
-| `Persistence:ApplyMigrationsOnStartup` | `false` (`true` в Development/Docker) | Применять миграции при старте |
-| `Persistence:SeedDemoData` | `false` (`true` в Development/Docker) | Добавить демо-заказы `ORD-001…003` |
-| `ExternalApi:BaseUrl` | — (обязателен; в Development `http://localhost:5080`) | Адрес внешней системы |
-| `ExternalApi:DocumentsPath` | `/mock/external/documents` | Относительный путь к списку документов во внешней системе |
-| `ExternalApi:MaxRetryAttempts` | `3` | Число повторов; таймауты, backoff с jitter и circuit breaker — стандартные значения `AddStandardResilienceHandler` |
-| `GoogleSheets:FilePath` | `google-sheets-mock/sync-log.csv` | CSV-файл mock-таблицы Google |
-| `MockExternalApi:Enabled` | `false` (`true` в Development/Docker) | Подключить mock внешней системы |
+| `ConnectionStrings:LedgerSync` | — | PostgreSQL connection string (required) |
+| `Persistence:ApplyMigrationsOnStartup` | `false` (`true` in Development/Docker) | Apply migrations on startup |
+| `Persistence:SeedDemoData` | `false` (`true` in Development/Docker) | Add the demo orders `ORD-001…003` |
+| `ExternalApi:BaseUrl` | — (required; `http://localhost:5080` in Development) | External system address |
+| `ExternalApi:DocumentsPath` | `/mock/external/documents` | Relative path to the document list in the external system |
+| `ExternalApi:MaxRetryAttempts` | `3` | Number of retries; timeouts, backoff with jitter and the circuit breaker use the `AddStandardResilienceHandler` defaults |
+| `GoogleSheets:FilePath` | `google-sheets-mock/sync-log.csv` | CSV file of the Google sheet mock |
+| `MockExternalApi:Enabled` | `false` (`true` in Development/Docker) | Enable the external system mock |
 
-Секции `ExternalApi` и `GoogleSheets` валидируются при старте (`ValidateOnStart`), наличие строки подключения
-проверяется при регистрации сервисов: при неверной конфигурации приложение не запустится.
+The `ExternalApi` and `GoogleSheets` sections are validated on startup (`ValidateOnStart`), and the connection
+string is checked when services are registered: with an invalid configuration the application will not start.
 
-## Принятые решения
+## Design decisions
 
-| Вопрос | Решение | Почему |
+| Question | Decision | Why |
 |---|---|---|
-| Enum или класс | `Enumeration<T>` (smart enum) | Нельзя получить неопределённое значение, есть безопасный `TryFromName` для недоверенных данных, имена совпадают в БД, API и коде |
-| Исключения | Узкие типы: `InvalidEntityDataException`, `UnknownEnumerationValueException`, `SyncRunAlreadyFinishedException`, `SyncAlreadyRunningException`, `OrderNotFoundException`… | По названию сразу понятно, что произошло. Exception handler точно маппит их в HTTP-коды |
-| Маппинг | Явные extension-методы вместо AutoMapper | 4 DTO, маппинг проверяется компилятором и читается без «магии». AutoMapper с v15 распространяется по коммерческой лицензии |
-| Валидация | FluentValidation для внешних данных и параметров запросов | Внешние данные недоверенные: проверяются до попадания в домен, все ошибки собираются сразу и сохраняются в журнал |
-| EF-конфигурация | Fluent API (`IEntityTypeConfiguration`) | Домен остаётся чистым от атрибутов, ограничения БД описаны в одном месте |
-| Кэширование | Не используется | Данные меняются при каждой синхронизации, чтение — один индексированный запрос. Кэш дал бы риск устаревших данных без ощутимой выгоды. При росте нагрузки — `HybridCache` с инвалидацией после синхронизации |
-| Время | `TimeProvider` | Детерминированные тесты, все даты нормализуются в UTC |
-| Логирование | `LoggerMessage` source generator, стабильные EventId, scope `RunId` | Все записи одного запуска связаны по `RunId`; в Docker логи в JSON |
+| Enum or class | `Enumeration<T>` (smart enum) | An undefined value cannot be created, there is a safe `TryFromName` for untrusted data, the names are the same in the database, the API and the code |
+| Exceptions | Narrow types: `InvalidEntityDataException`, `UnknownEnumerationValueException`, `SyncRunAlreadyFinishedException`, `SyncAlreadyRunningException`, `OrderNotFoundException`… | The name tells what happened. The exception handler maps them precisely to HTTP codes |
+| Mapping | Explicit extension methods instead of AutoMapper | 4 DTOs, the mapping is checked by the compiler and reads without "magic". AutoMapper has been commercially licensed since v15 |
+| Validation | FluentValidation for external data and query parameters | External data is untrusted: it is validated before reaching the domain, all errors are collected at once and stored in the journal |
+| EF configuration | Fluent API (`IEntityTypeConfiguration`) | The domain stays free of attributes, database constraints are described in one place |
+| Caching | Not used | Data changes on every sync, a read is one indexed query. A cache would risk stale data without a noticeable gain. If load grows — `HybridCache` with invalidation after a sync |
+| Time | `TimeProvider` | Deterministic tests, all dates are normalized to UTC |
+| Logging | `LoggerMessage` source generator, stable EventIds, `RunId` scope | All records of one run are linked by `RunId`; JSON logs in Docker |
