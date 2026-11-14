@@ -1,5 +1,8 @@
 using LedgerSync.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
+using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -29,10 +32,25 @@ public static class DatabaseInitializer
 
         // In Docker the API starts only after PostgreSQL is healthy, so no retry loop is needed.
         if (options.ApplyMigrationsOnStartup)
-            await dbContext.Database.MigrateAsync(cancellationToken);
+            await MigrateAsync(dbContext, cancellationToken);
 
         if (options.SeedDemoData)
             await SeedDemoOrdersAsync(scope.ServiceProvider, dbContext, cancellationToken);
+    }
+
+    /// <summary>
+    /// Creates the database and the migrations history table up front, then applies migrations.
+    /// On an empty database EF Core would otherwise first query the missing history table and log
+    /// a misleading "Failed executing DbCommand" error on the very first start.
+    /// </summary>
+    private static async Task MigrateAsync(LedgerSyncDbContext dbContext, CancellationToken cancellationToken)
+    {
+        var databaseCreator = dbContext.GetService<IRelationalDatabaseCreator>();
+        if (!await databaseCreator.ExistsAsync(cancellationToken))
+            await databaseCreator.CreateAsync(cancellationToken);
+
+        await dbContext.GetService<IHistoryRepository>().CreateIfNotExistsAsync(cancellationToken);
+        await dbContext.Database.MigrateAsync(cancellationToken);
     }
 
     /// <summary>
