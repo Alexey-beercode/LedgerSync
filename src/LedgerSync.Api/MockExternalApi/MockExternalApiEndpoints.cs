@@ -33,6 +33,11 @@ public static class MockExternalApiEndpoints
             return Results.Json(new { error = "External system is down (simulated)." },
                 statusCode: StatusCodes.Status503ServiceUnavailable);
 
+        // Deliberately truncated JSON. Kept in code, not in a .json file, so editors cannot "fix" it.
+        if (scenario == MockExternalScenario.Malformed)
+            return Results.Content("""[ { "externalId": "EXT-INV-001", "orderNumber": "ORD-001", "amount": 150000.00, """,
+                "application/json");
+
         var path = Path.Combine(environment.ContentRootPath, "MockExternalApi", "Data",
             $"{scenario.ToString().ToLowerInvariant()}.json");
         var json = await File.ReadAllTextAsync(path, cancellationToken);
