@@ -546,7 +546,9 @@ curl -X PUT http://localhost:8080/mock/external/scenario/Updated
 | `Malformed` | broken JSON | `Failed`: `External source returned malformed JSON.` |
 | `Unavailable` | HTTP 503 | retry → `Failed`: `External source returned HTTP 503 ...` |
 
-Scenario data: `src/LedgerSync.Api/MockExternalApi/Data/*.json`.
+Scenario data: `src/LedgerSync.Api/MockExternalApi/Data/*.json`. `Malformed` and `Unavailable` are produced in code
+([MockExternalApiEndpoints.cs](src/LedgerSync.Api/MockExternalApi/MockExternalApiEndpoints.cs)), so an editor cannot
+accidentally "fix" the broken JSON.
 
 Mapping to the scenarios from section 4 of the assignment:
 
